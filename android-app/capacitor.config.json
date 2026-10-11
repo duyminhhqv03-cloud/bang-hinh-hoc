@@ -1,0 +1,12 @@
+{
+  "appId": "vn.banghinhhoc.app",
+  "appName": "Bảng hình học",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#ffffff"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}
