@@ -149,10 +149,27 @@ svg .d{fill:currentColor;stroke:none}
 .card .dt{color:var(--muted);font-size:12px}
 .card .row{display:flex;gap:4px;margin-top:8px;flex-wrap:wrap}
 .card .row .cb{height:30px;padding:0 8px;font-size:12px}
+/* Gõ trực tiếp trên mặt bảng (In-place Direct Canvas Typing) + Thanh nổi thông minh */
+#mathEd{position:absolute;z-index:8;pointer-events:none}
+#mathBox{position:relative;display:inline-block;min-width:44px;min-height:30px;padding:4px 8px;border-radius:8px;border:1.8px dashed var(--accent);background:rgba(47,93,80,.04);pointer-events:auto;cursor:text}
+#mathDrag{position:absolute;left:-10px;top:-10px;width:22px;height:22px;border-radius:50%;background:var(--accent);color:var(--accent-ink);display:grid;place-items:center;cursor:move;box-shadow:0 2px 6px rgba(0,0,0,.25);touch-action:none}
+#mathDrag svg{width:13px;height:13px;stroke-width:2.2}
+#mathIn{position:absolute;inset:0;width:100%;height:100%;opacity:0;caret-color:transparent;background:transparent;color:transparent;border:0;outline:0;resize:none;overflow:hidden;font:500 18px/1.4 "Be Vietnam Pro",system-ui,sans-serif;padding:4px 8px;-webkit-user-select:text;user-select:text;z-index:2;cursor:text}
+#mathIn:focus{outline:none}
+#mathPrev{display:block;pointer-events:none}
+#mathRawBar{position:absolute;left:0;top:calc(100% + 4px);min-width:220px;max-width:min(460px,88vw);padding:3px 8px;border-radius:7px;background:var(--chrome);border:1px solid var(--edge);box-shadow:var(--shadow);font:500 12.5px/1.35 ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted);pointer-events:auto;white-space:pre-wrap;word-break:break-word}
+#mathRawBar b{color:var(--accent);font-weight:600}
+#mathRibbon{position:absolute;left:0;bottom:calc(100% + 10px);display:flex;align-items:center;gap:3px;padding:4px 6px;border-radius:11px;background:var(--chrome);border:1px solid var(--edge);box-shadow:var(--shadow);pointer-events:auto;max-width:min(680px,calc(100vw - 20px));overflow-x:auto;scrollbar-width:none}
+#mathRibbon::-webkit-scrollbar{display:none}
+#mathRibbon.below{bottom:auto;top:calc(100% + 28px)}
+.mb{flex:none;min-width:32px;height:30px;padding:0 7px;border-radius:7px;border:1px solid var(--edge);background:var(--chrome-2);font:600 14px "Times New Roman",Times,serif;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;white-space:nowrap}
+.mb:hover,.mb:active{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.mb.sans{font-family:"Be Vietnam Pro",system-ui,sans-serif;font-size:12px;font-weight:500}
+.mb.act{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 /* Chế độ trình chiếu */
 #present{display:none;left:50%;bottom:10px;transform:translateX(-50%);gap:4px;padding:5px;z-index:4;opacity:.35;transition:opacity .2s}
 #present:hover,#present:focus-within{opacity:1}
-body.present #tb,body.present #dd,body.present #sys,body.present #help,body.present #style,body.present #strip,body.present #penPop,body.present #erPop{display:none !important}
+body.present #tb,body.present #dd,body.present #sys,body.present #help,body.present #style,body.present #strip,body.present #penPop,body.present #erPop,body.present #mathEd{display:none !important}
 body.present #present{display:flex}
 /* Hộp nhập số, hộp xuất ảnh */
 #ask,#exp{position:absolute;inset:0;display:grid;place-items:center;background:rgba(20,30,26,.28);z-index:9}
@@ -198,6 +215,7 @@ body.present #present{display:flex}
   <button class="cb" id="stCoord">Hiện tọa độ</button>
   <button class="cb" id="stFill">Tô nền</button>
   <button class="cb" id="stArea">Hiện diện tích</button>
+  <button class="cb" id="stSize">Cỡ chữ: Vừa</button>
   <button class="cb" id="stEdit">Sửa</button>
   <button class="cb" id="stAnim">Chạy</button>
   <button class="cb" id="stTrace">Dấu vết</button>
@@ -278,6 +296,16 @@ body.present #present{display:flex}
   <button class="mi" id="mFull">Bật / tắt toàn màn hình</button>
   <div class="msep"></div>
   <button class="mi danger" id="mNew">Xóa hết nội dung bài này</button>
+</div>
+
+<div id="mathEd" hidden>
+  <div id="mathRibbon"></div>
+  <div id="mathBox">
+    <div id="mathDrag" title="Kéo để di chuyển ô chữ"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg></div>
+    <canvas id="mathPrev"></canvas>
+    <textarea id="mathIn" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+  </div>
+  <div id="mathRawBar" hidden></div>
 </div>
 
 <div id="ask" hidden>
@@ -765,7 +793,349 @@ function inPolyG(x, y, P){
   for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i].y > y) !== (P[j].y > y) && x < (P[j].x - P[i].x) * (y - P[i].y) / (P[j].y - P[i].y) + P[i].x) c = !c;
   return c;
 }
-function textBox(o){ const w = (o.tw || o.text.length * 10) / view.k, h = 22 / view.k; return [o.x, o.y - h, o.x + w, o.y]; }
+/* ================= Bộ dựng Công thức Toán & Văn bản 2D (Canvas + SVG) ================= */
+const MATH_SYMS = {
+  alpha:'α', beta:'β', gamma:'γ', delta:'δ', Delta:'Δ', epsilon:'ε', zeta:'ζ', eta:'η', theta:'θ', Theta:'Θ',
+  lambda:'λ', mu:'μ', pi:'π', Pi:'Π', rho:'ρ', sigma:'σ', Sigma:'Σ', tau:'τ', phi:'φ', Phi:'Φ', omega:'ω', Omega:'Ω',
+  infty:'∞', pm:'±', mp:'∓', cdot:'·', times:'×', div:'÷', le:'≤', leq:'≤', ge:'≥', geq:'≥', ne:'≠', neq:'≠',
+  approx:'≈', equiv:'≡', sim:'∼', simeq:'≃', cong:'≅', perp:'⊥', para:'∥', parallel:'∥', angle:'∠',
+  in:'∈', notin:'∉', subset:'⊂', supset:'⊃', subseteq:'⊆', supseteq:'⊇', cup:'∪', cap:'∩', empty:'∅', varnothing:'∅',
+  forall:'∀', exists:'∃', nexists:'∄', therefore:'∴', because:'∵',
+  to:'→', rightarrow:'→', leftarrow:'←', Rightarrow:'⇒', Leftarrow:'⇐', Leftrightarrow:'⇔', iff:'⇔', mapsto:'↦',
+  int:'∫', sum:'∑', prod:'∏', partial:'∂', nabla:'∇', deg:'°', circ:'°', triangle:'△', square:'□',
+  N:'ℕ', Z:'ℤ', Q:'ℚ', R:'ℝ', C:'ℂ'
+};
+const AUTO_REP = [
+  ['<=>', '⇔'], ['=>', '⇒'], ['<=', '≤'], ['>=', '≥'], ['!=', '≠'], ['+-', '±'], ['->', '→'], ['...', '…']
+];
+function replaceAutoSyms(s){
+  let out = s;
+  for (const [k, v] of AUTO_REP) out = out.split(k).join(v);
+  return out;
+}
+function readBrace(s, i){
+  while (i < s.length && s[i] === ' ') i++;
+  if (s[i] === '{'){
+    let d = 1, j = i + 1;
+    while (j < s.length && d > 0){ if (s[j] === '{') d++; else if (s[j] === '}') d--; j++; }
+    return {val: s.slice(i + 1, j - 1), next: j};
+  }
+  if (s[i] === '\\'){
+    let j = i + 1; while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+    return {val: s.slice(i, j), next: j};
+  }
+  return {val: s[i] || '', next: i + 1};
+}
+function parseMathLine(str){
+  const s = replaceAutoSyms(str), nodes = [];
+  let i = 0;
+  while (i < s.length){
+    const ch = s[i];
+    if (ch === '\\'){
+      let j = i + 1;
+      while (j < s.length && /[a-zA-Z]/.test(s[j])) j++;
+      const cmd = s.slice(i + 1, j);
+      if (!cmd){ if (j < s.length){ nodes.push({k:'txt', v: s[j]}); i = j + 1; } else i = j; continue; }
+      i = j;
+      if (cmd === 'frac' || cmd === 'dfrac'){
+        const a = readBrace(s, i), b = readBrace(s, a.next); i = b.next;
+        nodes.push({k:'frac', num: parseMathLine(a.val), den: parseMathLine(b.val)});
+      } else if (cmd === 'sqrt'){
+        let deg = null;
+        while (i < s.length && s[i] === ' ') i++;
+        if (s[i] === '['){ const close = s.indexOf(']', i + 1); if (close > i){ deg = parseMathLine(s.slice(i + 1, close)); i = close + 1; } }
+        const a = readBrace(s, i); i = a.next;
+        nodes.push({k:'sqrt', deg, body: parseMathLine(a.val)});
+      } else if (cmd === 'vec' || cmd === 'overrightarrow' || cmd === 'hat' || cmd === 'widehat' || cmd === 'bar' || cmd === 'overline' || cmd === 'arc'){
+        const a = readBrace(s, i); i = a.next;
+        const kind = (cmd === 'vec' || cmd === 'overrightarrow') ? 'vec' : (cmd === 'hat' || cmd === 'widehat') ? 'hat' : cmd === 'arc' ? 'arc' : 'bar';
+        nodes.push({k:'over', acc: kind, body: parseMathLine(a.val)});
+      } else if (cmd === 'he' || cmd === 'cases' || cmd === 'hoac'){
+        const a = readBrace(s, i); i = a.next;
+        const rows = a.val.split(/\s*;\s*|\s*\\\\\s*/).filter(Boolean).map(r => parseMathLine(r));
+        nodes.push({k:'cases', sq: cmd === 'hoac', rows: rows.length ? rows : [parseMathLine('')]});
+      } else if (cmd === 'abs' || cmd === 'norm'){
+        const a = readBrace(s, i); i = a.next;
+        nodes.push({k:'delim', l: cmd === 'abs' ? '|' : '‖', r: cmd === 'abs' ? '|' : '‖', body: parseMathLine(a.val)});
+      } else if (MATH_SYMS[cmd]){
+        nodes.push({k:'txt', v: MATH_SYMS[cmd], sym: true});
+      } else {
+        nodes.push({k:'txt', v: cmd});
+      }
+      continue;
+    }
+    if (ch === '^' || ch === '_'){
+      const isSup = ch === '^', a = readBrace(s, i + 1); i = a.next;
+      const prev = nodes[nodes.length - 1];
+      if (prev && prev.k === 'scripts' && ((isSup && !prev.sup) || (!isSup && !prev.sub))){
+        if (isSup) prev.sup = parseMathLine(a.val); else prev.sub = parseMathLine(a.val);
+      } else {
+        const base = prev ? nodes.pop() : {k:'txt', v:''};
+        nodes.push({k:'scripts', base, sup: isSup ? parseMathLine(a.val) : null, sub: !isSup ? parseMathLine(a.val) : null});
+      }
+      continue;
+    }
+    if (ch === '{'){
+      const a = readBrace(s, i); i = a.next;
+      nodes.push({k:'group', body: parseMathLine(a.val)});
+      continue;
+    }
+    let j = i;
+    while (j < s.length && !'\\^_{}'.includes(s[j])) j++;
+    nodes.push({k:'txt', v: s.slice(i, j)});
+    i = j;
+  }
+  return nodes;
+}
+
+const mCanvas = document.createElement('canvas'), mCtx = mCanvas.getContext('2d');
+function mathFont(sz, italic){
+  return (italic ? 'italic 500 ' : '500 ') + Math.round(sz * 10) / 10 + 'px "Be Vietnam Pro","Times New Roman",system-ui,sans-serif';
+}
+function measureRun(txt, sz){
+  mCtx.font = mathFont(sz, false);
+  const w = (mCtx.measureText(txt) || {}).width || txt.length * sz * 0.55;
+  return {w, asc: sz * 0.78, desc: sz * 0.24, sz, txt};
+}
+function layoutNodes(nodes, sz){
+  const items = []; let x = 0, asc = sz * 0.78, desc = sz * 0.24;
+  for (const nd of nodes){
+    const b = layoutNode(nd, sz);
+    b.dx = x; items.push(b); x += b.w;
+    if (b.asc > asc) asc = b.asc;
+    if (b.desc > desc) desc = b.desc;
+  }
+  return {k:'row', items, w: x, asc, desc, sz};
+}
+function layoutNode(nd, sz){
+  switch (nd.k){
+    case 'txt': {
+      const m = measureRun(nd.v, sz);
+      return {k:'txt', v: nd.v, w: m.w, asc: m.asc, desc: m.desc, sz};
+    }
+    case 'group': return layoutNodes(nd.body, sz);
+    case 'frac': {
+      const s2 = Math.max(11, sz * 0.82), num = layoutNodes(nd.num, s2), den = layoutNodes(nd.den, s2);
+      const pad = sz * 0.22, w = Math.max(num.w, den.w) + pad * 2, axis = sz * 0.28, gap = sz * 0.16;
+      const asc = axis + gap + num.asc + num.desc, desc = Math.max(sz * 0.25, (den.asc + den.desc) + gap - axis);
+      return {k:'frac', num, den, w, asc, desc, axis, gap, pad, sz};
+    }
+    case 'sqrt': {
+      const body = layoutNodes(nd.body, sz), deg = nd.deg ? layoutNodes(nd.deg, Math.max(10, sz * 0.6)) : null;
+      const padL = sz * 0.55 + (deg ? Math.max(0, deg.w - sz * 0.25) : 0), padR = sz * 0.14, topGap = sz * 0.16;
+      return {k:'sqrt', body, deg, padL, padR, w: padL + body.w + padR, asc: body.asc + topGap + 2, desc: body.desc + 1, sz};
+    }
+    case 'over': {
+      const body = layoutNodes(nd.body, sz), extra = sz * 0.28;
+      return {k:'over', acc: nd.acc, body, w: body.w + sz * 0.08, asc: body.asc + extra, desc: body.desc, sz};
+    }
+    case 'scripts': {
+      const base = layoutNode(nd.base, sz), s2 = Math.max(10, sz * 0.66);
+      const sup = nd.sup ? layoutNodes(nd.sup, s2) : null, sub = nd.sub ? layoutNodes(nd.sub, s2) : null;
+      const sw = Math.max(sup ? sup.w : 0, sub ? sub.w : 0) + sz * 0.06;
+      const supShift = Math.max(sz * 0.36, base.asc - s2 * 0.35);
+      const subShift = Math.max(sz * 0.24, base.desc + s2 * 0.35);
+      const asc = Math.max(base.asc, sup ? supShift + sup.asc : 0);
+      const desc = Math.max(base.desc, sub ? subShift + sub.desc : 0);
+      return {k:'scripts', base, sup, sub, supShift, subShift, w: base.w + sw, asc, desc, sz};
+    }
+    case 'cases': {
+      const rows = nd.rows.map(r => layoutNodes(r, sz * 0.94));
+      const gap = sz * 0.28, brW = sz * 0.52;
+      let rw = 0, totalH = 0;
+      rows.forEach((r, idx) => { rw = Math.max(rw, r.w); totalH += r.asc + r.desc + (idx ? gap : 0); });
+      const axis = sz * 0.28, asc = totalH / 2 + axis, desc = Math.max(sz * 0.25, totalH / 2 - axis);
+      return {k:'cases', sq: nd.sq, rows, gap, brW, totalH, axis, w: brW + rw + sz * 0.15, asc, desc, sz};
+    }
+    case 'delim': {
+      const body = layoutNodes(nd.body, sz), pad = sz * 0.22;
+      return {k:'delim', l: nd.l, r: nd.r, body, pad, w: body.w + pad * 2, asc: body.asc + 2, desc: body.desc + 2, sz};
+    }
+  }
+  return {k:'txt', v:'', w:0, asc: sz * 0.78, desc: sz * 0.24, sz};
+}
+function layoutMathBlock(text, sz){
+  const rawLines = String(text || '').split(/\r?\n/);
+  const lines = rawLines.map(l => layoutNodes(parseMathLine(l), sz));
+  const lineGap = sz * 0.32;
+  let w = 0, h = 0;
+  lines.forEach((ln, idx) => {
+    w = Math.max(w, ln.w);
+    ln.yOff = h + ln.asc;
+    h += ln.asc + ln.desc + (idx < lines.length - 1 ? lineGap : 0);
+  });
+  return {lines, w: Math.max(w, 12), h: Math.max(h, sz * 1.15), sz};
+}
+function renderMathNode(ctx, b, x, y, color){
+  ctx.fillStyle = color; ctx.strokeStyle = color; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash([]);
+  switch (b.k){
+    case 'row':
+      for (const it of b.items) renderMathNode(ctx, it, x + it.dx, y, color);
+      break;
+    case 'txt':
+      if (!b.v) break;
+      ctx.font = mathFont(b.sz, false); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(b.v, x, y);
+      break;
+    case 'frac': {
+      const by = y - b.axis, lw = Math.max(1.2, b.sz * 0.065);
+      ctx.lineWidth = lw; ctx.beginPath(); ctx.moveTo(x + b.pad * 0.4, by); ctx.lineTo(x + b.w - b.pad * 0.4, by); ctx.stroke();
+      renderMathNode(ctx, b.num, x + (b.w - b.num.w) / 2, by - b.gap - b.num.desc, color);
+      renderMathNode(ctx, b.den, x + (b.w - b.den.w) / 2, by + b.gap + b.den.asc, color);
+      break;
+    }
+    case 'sqrt': {
+      const topY = y - b.body.asc - b.sz * 0.1, botY = y + b.body.desc * 0.85, midY = (topY + botY) / 2;
+      const rx0 = x + b.padL - b.sz * 0.5, rx1 = x + b.padL - b.sz * 0.34, rx2 = x + b.padL - b.sz * 0.18, rx3 = x + b.padL - b.sz * 0.03;
+      if (b.deg) renderMathNode(ctx, b.deg, x + Math.max(0, b.padL - b.sz * 0.46 - b.deg.w), midY - b.sz * 0.12, color);
+      ctx.lineWidth = Math.max(1.3, b.sz * 0.07);
+      ctx.beginPath();
+      ctx.moveTo(rx0, midY + b.sz * 0.06);
+      ctx.lineTo(rx1, midY);
+      ctx.lineTo(rx2, botY);
+      ctx.lineTo(rx3, topY);
+      ctx.lineTo(x + b.w - b.padR * 0.3, topY);
+      ctx.stroke();
+      renderMathNode(ctx, b.body, x + b.padL, y, color);
+      break;
+    }
+    case 'over': {
+      const bx = x + b.sz * 0.04, topY = y - b.body.asc - b.sz * 0.12, w = Math.max(b.body.w, b.sz * 0.45);
+      renderMathNode(ctx, b.body, bx, y, color);
+      ctx.lineWidth = Math.max(1.2, b.sz * 0.065);
+      ctx.beginPath();
+      if (b.acc === 'vec'){
+        ctx.moveTo(bx, topY); ctx.lineTo(bx + w, topY);
+        ctx.moveTo(bx + w - b.sz * 0.22, topY - b.sz * 0.13); ctx.lineTo(bx + w, topY); ctx.lineTo(bx + w - b.sz * 0.22, topY + b.sz * 0.13);
+      } else if (b.acc === 'hat'){
+        ctx.moveTo(bx, topY + b.sz * 0.08); ctx.lineTo(bx + w / 2, topY - b.sz * 0.1); ctx.lineTo(bx + w, topY + b.sz * 0.08);
+      } else if (b.acc === 'arc'){
+        ctx.moveTo(bx, topY + b.sz * 0.08); ctx.quadraticCurveTo(bx + w / 2, topY - b.sz * 0.18, bx + w, topY + b.sz * 0.08);
+      } else {
+        ctx.moveTo(bx, topY); ctx.lineTo(bx + w, topY);
+      }
+      ctx.stroke();
+      break;
+    }
+    case 'scripts': {
+      renderMathNode(ctx, b.base, x, y, color);
+      const sx = x + b.base.w + b.sz * 0.03;
+      if (b.sup) renderMathNode(ctx, b.sup, sx, y - b.supShift, color);
+      if (b.sub) renderMathNode(ctx, b.sub, sx, y + b.subShift, color);
+      break;
+    }
+    case 'cases': {
+      const topY = y - b.asc + b.sz * 0.08, botY = y + b.desc - b.sz * 0.08, midY = (topY + botY) / 2;
+      const bx = x + b.brW * 0.55, w = b.brW * 0.34;
+      ctx.lineWidth = Math.max(1.35, b.sz * 0.07);
+      ctx.beginPath();
+      if (b.sq){
+        ctx.moveTo(bx + w * 0.6, topY); ctx.lineTo(bx - w * 0.4, topY); ctx.lineTo(bx - w * 0.4, botY); ctx.lineTo(bx + w * 0.6, botY);
+      } else {
+        ctx.moveTo(bx + w * 0.6, topY);
+        ctx.quadraticCurveTo(bx, topY, bx, topY + b.sz * 0.22);
+        ctx.lineTo(bx, midY - b.sz * 0.18);
+        ctx.quadraticCurveTo(bx, midY, bx - w * 0.65, midY);
+        ctx.quadraticCurveTo(bx, midY, bx, midY + b.sz * 0.18);
+        ctx.lineTo(bx, botY - b.sz * 0.22);
+        ctx.quadraticCurveTo(bx, botY, bx + w * 0.6, botY);
+      }
+      ctx.stroke();
+      let cy = y - b.asc + b.sz * 0.04;
+      for (const r of b.rows){
+        cy += r.asc;
+        renderMathNode(ctx, r, x + b.brW, cy, color);
+        cy += r.desc + b.gap;
+      }
+      break;
+    }
+    case 'delim': {
+      const topY = y - b.body.asc, botY = y + b.body.desc;
+      ctx.lineWidth = Math.max(1.2, b.sz * 0.065);
+      ctx.beginPath();
+      ctx.moveTo(x + b.pad * 0.45, topY); ctx.lineTo(x + b.pad * 0.45, botY);
+      ctx.moveTo(x + b.w - b.pad * 0.45, topY); ctx.lineTo(x + b.w - b.pad * 0.45, botY);
+      ctx.stroke();
+      renderMathNode(ctx, b.body, x + b.pad, y, color);
+      break;
+    }
+  }
+}
+function drawMathObject(ctx, o, sx, sy, color){
+  const sz = o.sz || 20, lay = layoutMathBlock(o.text, sz);
+  o.tw = lay.w; o.th = lay.h;
+  for (const ln of lay.lines) renderMathNode(ctx, ln, sx, sy + ln.yOff, color);
+  return lay;
+}
+function renderMathNodeSVG(b, x, y, color, out){
+  const r2 = (v) => Math.round(v * 100) / 100;
+  const fnt = 'font-family="Be Vietnam Pro, Times New Roman, sans-serif"';
+  switch (b.k){
+    case 'row':
+      for (const it of b.items) renderMathNodeSVG(it, x + it.dx, y, color, out);
+      break;
+    case 'txt':
+      if (!b.v) break;
+      out.push('<text x="' + r2(x) + '" y="' + r2(y) + '" ' + fnt + ' font-size="' + r2(b.sz) + '" font-weight="500" fill="' + color + '">' + esc(b.v) + '</text>');
+      break;
+    case 'frac': {
+      const by = y - b.axis, lw = r2(Math.max(1.2, b.sz * 0.065));
+      out.push('<line x1="' + r2(x + b.pad * 0.4) + '" y1="' + r2(by) + '" x2="' + r2(x + b.w - b.pad * 0.4) + '" y2="' + r2(by) + '" stroke="' + color + '" stroke-width="' + lw + '" stroke-linecap="round"/>');
+      renderMathNodeSVG(b.num, x + (b.w - b.num.w) / 2, by - b.gap - b.num.desc, color, out);
+      renderMathNodeSVG(b.den, x + (b.w - b.den.w) / 2, by + b.gap + b.den.asc, color, out);
+      break;
+    }
+    case 'sqrt': {
+      const topY = y - b.body.asc - b.sz * 0.1, botY = y + b.body.desc * 0.85, midY = (topY + botY) / 2;
+      const rx0 = x + b.padL - b.sz * 0.5, rx1 = x + b.padL - b.sz * 0.34, rx2 = x + b.padL - b.sz * 0.18, rx3 = x + b.padL - b.sz * 0.03;
+      if (b.deg) renderMathNodeSVG(b.deg, x + Math.max(0, b.padL - b.sz * 0.46 - b.deg.w), midY - b.sz * 0.12, color, out);
+      const lw = r2(Math.max(1.3, b.sz * 0.07));
+      out.push('<path d="M' + r2(rx0) + ' ' + r2(midY + b.sz * 0.06) + ' L' + r2(rx1) + ' ' + r2(midY) + ' L' + r2(rx2) + ' ' + r2(botY) + ' L' + r2(rx3) + ' ' + r2(topY) + ' L' + r2(x + b.w - b.padR * 0.3) + ' ' + r2(topY) + '" fill="none" stroke="' + color + '" stroke-width="' + lw + '" stroke-linecap="round" stroke-linejoin="round"/>');
+      renderMathNodeSVG(b.body, x + b.padL, y, color, out);
+      break;
+    }
+    case 'over': {
+      const bx = x + b.sz * 0.04, topY = y - b.body.asc - b.sz * 0.12, w = Math.max(b.body.w, b.sz * 0.45), lw = r2(Math.max(1.2, b.sz * 0.065));
+      renderMathNodeSVG(b.body, bx, y, color, out);
+      if (b.acc === 'vec'){
+        out.push('<path d="M' + r2(bx) + ' ' + r2(topY) + ' L' + r2(bx + w) + ' ' + r2(topY) + ' M' + r2(bx + w - b.sz * 0.22) + ' ' + r2(topY - b.sz * 0.13) + ' L' + r2(bx + w) + ' ' + r2(topY) + ' L' + r2(bx + w - b.sz * 0.22) + ' ' + r2(topY + b.sz * 0.13) + '" fill="none" stroke="' + color + '" stroke-width="' + lw + '" stroke-linecap="round" stroke-linejoin="round"/>');
+      } else if (b.acc === 'hat'){
+        out.push('<path d="M' + r2(bx) + ' ' + r2(topY + b.sz * 0.08) + ' L' + r2(bx + w / 2) + ' ' + r2(topY - b.sz * 0.1) + ' L' + r2(bx + w) + ' ' + r2(topY + b.sz * 0.08) + '" fill="none" stroke="' + color + '" stroke-width="' + lw + '" stroke-linecap="round" stroke-linejoin="round"/>');
+      } else {
+        out.push('<line x1="' + r2(bx) + '" y1="' + r2(topY) + '" x2="' + r2(bx + w) + '" y2="' + r2(topY) + '" stroke="' + color + '" stroke-width="' + lw + '" stroke-linecap="round"/>');
+      }
+      break;
+    }
+    case 'scripts': {
+      renderMathNodeSVG(b.base, x, y, color, out);
+      const sx = x + b.base.w + b.sz * 0.03;
+      if (b.sup) renderMathNodeSVG(b.sup, sx, y - b.supShift, color, out);
+      if (b.sub) renderMathNodeSVG(b.sub, sx, y + b.subShift, color, out);
+      break;
+    }
+    case 'cases': {
+      const topY = y - b.asc + b.sz * 0.08, botY = y + b.desc - b.sz * 0.08, midY = (topY + botY) / 2;
+      const bx = x + b.brW * 0.55, w = b.brW * 0.34, lw = r2(Math.max(1.35, b.sz * 0.07));
+      if (b.sq){
+        out.push('<path d="M' + r2(bx + w * 0.6) + ' ' + r2(topY) + ' L' + r2(bx - w * 0.4) + ' ' + r2(topY) + ' L' + r2(bx - w * 0.4) + ' ' + r2(botY) + ' L' + r2(bx + w * 0.6) + ' ' + r2(botY) + '" fill="none" stroke="' + color + '" stroke-width="' + lw + '"/>');
+      } else {
+        out.push('<path d="M' + r2(bx + w * 0.6) + ' ' + r2(topY) + ' Q' + r2(bx) + ' ' + r2(topY) + ' ' + r2(bx) + ' ' + r2(topY + b.sz * 0.22) + ' L' + r2(bx) + ' ' + r2(midY - b.sz * 0.18) + ' Q' + r2(bx) + ' ' + r2(midY) + ' ' + r2(bx - w * 0.65) + ' ' + r2(midY) + ' Q' + r2(bx) + ' ' + r2(midY) + ' ' + r2(bx) + ' ' + r2(midY + b.sz * 0.18) + ' L' + r2(bx) + ' ' + r2(botY - b.sz * 0.22) + ' Q' + r2(bx) + ' ' + r2(botY) + ' ' + r2(bx + w * 0.6) + ' ' + r2(botY) + '" fill="none" stroke="' + color + '" stroke-width="' + lw + '" stroke-linecap="round"/>');
+      }
+      let cy = y - b.asc + b.sz * 0.04;
+      for (const r of b.rows){ cy += r.asc; renderMathNodeSVG(r, x + b.brW, cy, color, out); cy += r.desc + b.gap; }
+      break;
+    }
+    case 'delim': {
+      const topY = y - b.body.asc, botY = y + b.body.desc, lw = r2(Math.max(1.2, b.sz * 0.065));
+      out.push('<line x1="' + r2(x + b.pad * 0.45) + '" y1="' + r2(topY) + '" x2="' + r2(x + b.pad * 0.45) + '" y2="' + r2(botY) + '" stroke="' + color + '" stroke-width="' + lw + '"/>');
+      out.push('<line x1="' + r2(x + b.w - b.pad * 0.45) + '" y1="' + r2(topY) + '" x2="' + r2(x + b.w - b.pad * 0.45) + '" y2="' + r2(botY) + '" stroke="' + color + '" stroke-width="' + lw + '"/>');
+      renderMathNodeSVG(b.body, x + b.pad, y, color, out);
+      break;
+    }
+  }
+}
+
+function textBox(o){ if (!o.tw || !o.th){ const l = layoutMathBlock(o.text, o.sz || 20); o.tw = l.w; o.th = l.h; } const w = o.tw / view.k, h = o.th / view.k; return [o.x, o.y - h, o.x + w, o.y]; }
 const inText = (o, w) => { const b = textBox(o); return w.x >= b[0] && w.x <= b[2] && w.y >= b[1] && w.y <= b[3]; };
 const SL_W = 150;
 function sliderHit(o, s){ const bx = view.x + o.x * view.k, by = view.y - o.y * view.k; if (s.x < bx - 12 || s.x > bx + SL_W + 12) return null; if (Math.abs(s.y - by) <= 14) return 'knob'; if (s.y < by - 14 && s.y > by - 40) return 'label'; return null; }
@@ -979,6 +1349,34 @@ def('foot', 'Hình chiếu vuông góc', 'Chạm một điểm và một đườ
   }});
 
 def('polygon', 'Đa giác', 'Chạm lần lượt các đỉnh, rồi chạm lại đỉnh đầu tiên để khép kín.', 'p M5 18.5 11.5 5l8 9.5z;d 5 18.5;d 11.5 5;d 19.5 14.5', {chain: true, close: true});
+def('triRight', 'Tam giác vuông', 'Chạm hai đỉnh cạnh đáy: tự dựng đỉnh thứ ba tạo thành tam giác vuông chuẩn có ký hiệu góc vuông.', 'p M5 18.5h14L5 5.5z;p M5 15h3.5v3.5;d 5 18.5;d 19 18.5;d 5 5.5', {sig: PP,
+  make(a){
+    const c = newPoint({def: {kind:'sim', a: a[0], b: a[1], u: 0, v: 0.75}});
+    addSeg(a[0], a[1]); addSeg(a[0], c.id); addSeg(a[1], c.id);
+    addPoly([a[0], a[1], c.id]);
+    addObj({type:'angle', a: a[1], v: a[0], b: c.id, color:'ink', arcs: 1});
+  }});
+def('triIso', 'Tam giác cân', 'Chạm hai đỉnh đáy: tự dựng đỉnh thứ ba cân chuẩn và đánh dấu hai cạnh bên bằng nhau.', 'p M4.5 18.5 12 4.5l7.5 14z;d 4.5 18.5;d 19.5 18.5;d 12 4.5;l 7 11 9.5 12;l 17 11 14.5 12', {sig: PP,
+  make(a){
+    const c = newPoint({def: {kind:'sim', a: a[0], b: a[1], u: 0.5, v: 0.85}});
+    addSeg(a[0], a[1]); const s1 = addSeg(a[0], c.id), s2 = addSeg(a[1], c.id);
+    if (s1) s1.ticks = 1; if (s2) s2.ticks = 1;
+    addPoly([a[0], a[1], c.id]);
+  }});
+def('triEq', 'Tam giác đều', 'Chạm hai đỉnh: tự dựng tam giác đều và đánh dấu ba cạnh bằng nhau.', 'p M4.5 18.5 12 5.5l7.5 13z;d 4.5 18.5;d 19.5 18.5;d 12 5.5', {sig: PP,
+  make(a){
+    const c = newPoint({def: {kind:'sim', a: a[0], b: a[1], u: 0.5, v: Math.sqrt(3) / 2}});
+    const s0 = addSeg(a[0], a[1]), s1 = addSeg(a[0], c.id), s2 = addSeg(a[1], c.id);
+    if (s0) s0.ticks = 1; if (s1) s1.ticks = 1; if (s2) s2.ticks = 1;
+    addPoly([a[0], a[1], c.id]);
+  }});
+def('parallelogram', 'Hình bình hành', 'Chạm ba đỉnh liên tiếp A, B, C: tự dựng đỉnh D sao cho ABCD là hình bình hành.', 'p M3.5 18 8 6h12.5L16 18z;d 3.5 18;d 8 6;d 20.5 6;d 16 18', {sig: PPP,
+  make(a){
+    const v = newCurve({type:'vector', a: a[1], b: a[2], hidden: true});
+    const d = newPoint({def: {kind:'trans', p: a[0], v: v.id}, label: nextLabelFrom('D')});
+    addSeg(a[0], a[1]); addSeg(a[1], a[2]); addSeg(a[2], d.id); addSeg(d.id, a[0]);
+    addPoly([a[0], a[1], a[2], d.id]);
+  }});
 def('regular', 'Đa giác đều', 'Chạm hai đỉnh kề nhau, rồi nhập số đỉnh.', 'p M12 3.5l8.1 5.9-3.1 9.5H7l-3.1-9.5z', {sig: PP, ask: {title:'Số đỉnh của đa giác đều', def:'4', min: 3, max: 60, int: true},
   make(a, tp, si, n){
     const ids = [a[0], a[1]], th = TAU / n; let x = 1, y = 0;
@@ -1038,8 +1436,13 @@ def('func', 'Đồ thị hàm số', 'Gõ biểu thức theo x, ví dụ: x^2 - 
 def('numline', 'Tia số', 'Chạm vào chỗ đặt gốc 0 của tia số. Chọn rồi bấm Sửa để đổi số lớn nhất.', 'p M3 14h17M20 14l-3-2.5M20 14l-3 2.5;p M6 11v6M10 11v6M14 11v6', {
   custom(w){ pushUndo(snapshot()); const o = addObj({type:'numline', x: Math.round(w.x), y: Math.round(w.y), n: 10, color:'ink'}); commit(); pulse([o.id]); }});
 
-def('text', 'Văn bản', 'Chạm vào chỗ cần đặt chữ, rồi gõ nội dung.', 'p M5 6h14M12 6v13M9 19h6', {
-  custom(w){ askText('Nội dung văn bản', '').then(t => { if (!t) return; pushUndo(snapshot()); addObj({type:'text', x: r4(w.x), y: r4(w.y), text: t, color:'ink'}); commit(); }); }});
+def('text', 'Gõ chữ & Công thức trực tiếp (T/fx)', 'Chạm vào đâu gõ ngay tại đó: a/b + Space ra phân số, sqrt + Space ra căn, he + Space ra hệ (Enter thêm dòng, Enter 2 lần thoát), x^2+1 ra x²+1, x^(n+1) ra mũ dài. Nút ⇥ (hoặc Tab) sang ô tiếp, Xóa lùi ngay sau khi tự đổi để trả lại chữ gốc. Chạm ra ngoài hoặc bấm Xong để hoàn tất.', 'p M4 6h10M9 6v12M6.5 18h5;p M15 11l4 7M19 11l-4 7', {
+  custom(w, tol){
+    for (let i = S.objs.length - 1; i >= 0; i--){
+      const o = S.objs[i]; if (o.type === 'text' && shown(o) && inText(o, w)){ select(o.id); openMathEditor(w, o); return; }
+    }
+    openMathEditor(w, null);
+  }});
 
 def('angle', 'Đánh dấu góc', 'Chạm ba điểm: một cạnh, đỉnh, cạnh còn lại. Góc vuông tự hiện ký hiệu vuông. Chạm vào ký hiệu để đổi số cung hoặc hiện số đo.', 'p M20.5 18.5H4L15.5 5;p M11.5 18.5a7.5 7.5 0 0 0-2.6-5.7', {sig: PPP,
   make(a){ addObj({type:'angle', a: a[0], v: a[1], b: a[2], color:'ink', arcs: 1}); }});
@@ -1056,20 +1459,17 @@ def('eraser', 'Tẩy nét viết', 'Kéo qua nét viết để xóa. Hình dựn
 def('laser', 'Bút chỉ', 'Nét vẽ tự mờ sau vài giây, dùng để chỉ khi giảng.', 'd 12 12 3;p M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1');
 
 const GROUPS = [
-  ['move', 'rotate', 'freehand'],
-  ['point', 'name', 'pointOn', 'attach', 'intersect', 'mid'],
-  ['segment', 'line', 'segLen', 'ray', 'polyline', 'vector', 'vectorFrom'],
-  ['perp', 'para', 'foot', 'bisector', 'angBis', 'tangent', 'tangentPts', 'polar'],
-  ['polygon', 'regular', 'rigid'],
-  ['circle', 'circleR', 'compass', 'circle3', 'circumcircle', 'incircle', 'semicircle', 'arc', 'arc3', 'sector', 'sector3'],
-  ['ellipse', 'hyperbola', 'parabola', 'conic5'],
+  ['move', 'rotate', 'pan', 'hide', 'del'],
+  ['text', 'freehand'],
+  ['point', 'mid', 'intersect', 'pointOn', 'attach', 'name'],
+  ['segment', 'line', 'ray', 'segLen', 'perp', 'foot', 'para', 'bisector', 'angBis', 'vector', 'vectorFrom'],
+  ['polygon', 'triRight', 'triIso', 'triEq', 'parallelogram', 'regular', 'rigid', 'polyline'],
+  ['circle', 'circleR', 'circumcircle', 'incircle', 'tangentPts', 'tangent', 'compass', 'circle3', 'semicircle', 'arc', 'arc3', 'sector', 'sector3', 'polar'],
   ['angle', 'angleSize', 'distance', 'area'],
-  ['reflLine', 'reflPoint', 'rotateBy', 'translate', 'dilate'],
-  ['slider', 'func', 'numline', 'text'],
-  ['pan', 'hide', 'del']
+  ['func', 'slider', 'numline', 'reflLine', 'reflPoint', 'rotateBy', 'translate', 'dilate', 'ellipse', 'hyperbola', 'parabola', 'conic5']
 ];
-const GROUP_NAME = ['Di chuyển', 'Điểm', 'Đường thẳng', 'Đường đặc biệt', 'Đa giác', 'Đường tròn và cung', 'Conic', 'Góc và đo', 'Biến hình', 'Thanh trượt, đồ thị, chữ', 'Vùng nhìn, ẩn và xóa'];
-const PEN_TOOLS = ['pen', 'hl', 'eraser', 'lasso', 'laser'];
+const GROUP_NAME = ['Di chuyển & Quản lý', 'Gõ Toán & Vẽ nhanh', 'Điểm & Giao điểm', 'Đường thẳng & Quan hệ', 'Tam giác & Đa giác', 'Đường tròn & Tiếp tuyến', 'Góc & Đo đạc', 'Hàm số, Biến hình & Conic'];
+const PEN_TOOLS = ['pen', 'hl', 'eraser', 'text', 'lasso', 'laser'];
 const isGeoTool = (id) => !!(TOOLS[id].sig || TOOLS[id].chain || TOOLS[id].custom);
 
 /* ---------- Bộ máy chọn đối tượng cho công cụ ---------- */
@@ -1460,14 +1860,18 @@ function drawScene(ctx, vw, w, h, opt){
     }
     ctx.globalAlpha = 1;
   }
-  /* 4b. Văn bản */
+  /* 4b. Văn bản & Công thức Toán */
   for (const o of S.objs){
     if (o.type !== 'text' || !ghost(o)) continue;
-    ctx.font = '500 18px "Be Vietnam Pro",system-ui,sans-serif'; ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
-    o.tw = (ctx.measureText(o.text) || {}).width || o.text.length * 10;
-    const sx = X(o.x), sy = Y(o.y);
-    if (isSel(o.id)){ ctx.fillStyle = MARK; ctx.globalAlpha = .3; ctx.fillRect(sx - 4, sy - 4, o.tw + 8, 26); ctx.globalAlpha = 1; }
-    ctx.fillStyle = C(o); ctx.fillText(o.text, sx, sy + 18);
+    if (!opt.clean && typeof mathState !== 'undefined' && mathState.open && mathState.oid === o.id) continue;
+    const sx = X(o.x), sy = Y(o.y), lay = layoutMathBlock(o.text, o.sz || 20);
+    o.tw = lay.w; o.th = lay.h;
+    if (isSel(o.id)){
+      ctx.fillStyle = MARK; ctx.globalAlpha = .25; ctx.fillRect(sx - 5, sy - 4, o.tw + 10, o.th + 8);
+      ctx.strokeStyle = MARK; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.strokeRect(sx - 5, sy - 4, o.tw + 10, o.th + 8); ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    drawMathObject(ctx, o, sx, sy, C(o));
     ctx.globalAlpha = 1;
   }
   if (opt.only) return;
@@ -1545,6 +1949,7 @@ function panRedraw(){
   const s = view.k / fullView.k;
   const tf = 'translate(' + (view.x - fullView.x * s) + 'px,' + (view.y - fullView.y * s) + 'px) scale(' + s + ')';
   base.style.transformOrigin = img.style.transformOrigin = '0 0'; base.style.transform = img.style.transform = tf;
+  if (typeof syncMathPos === 'function') syncMathPos();
   redrawOver();
 }
 const lasers = [];
@@ -1577,7 +1982,8 @@ function drawOverlay(){
   if (act && act.kind === 'stroke'){
     octx.save(); octx.setTransform(DPR * view.k, 0, 0, -DPR * view.k, DPR * view.x, DPR * view.y);
     if (act.hl) octx.globalAlpha = .32;
-    drawStroke(octx, {pts: act.pts, w: act.w, vw: act.vw}, col(act.color, ui.paper), true); octx.restore();
+    const livePts = act.pred ? act.pts.concat(act.pred) : act.pts;
+    drawStroke(octx, {pts: livePts, w: act.w, vw: act.vw}, col(act.color, ui.paper), true); octx.restore();
   }
   octx.setLineDash([]); octx.lineCap = 'round'; octx.lineJoin = 'round';
   const ring = (g, r) => { if (!isPt(g)) return; octx.beginPath(); octx.arc(X(g.x), Y(g.y), r || 10, 0, TAU); octx.stroke(); };
@@ -1672,6 +2078,7 @@ function resize(){
   imgDirty = true;
   if (!view.init && W > 0){ view.x = W / 2; view.y = H / 2; view.init = true; }
   drawBase(); drawOverlay();
+  if (typeof syncMathPos === 'function') syncMathPos();
 }
 /* ================= Nắn nét vẽ tay thành hình ================= */
 function rdp(pts, eps){
@@ -1905,7 +2312,7 @@ function addTraces(){
 /* Bề rộng nét theo kiểu bút: lực nhấn, tốc độ và hướng đi của ngòi */
 /* Bộ lọc One Euro: tần số cắt thấp khi bút đi chậm (hết rung), tự tăng khi bút đi nhanh (không trễ).
    Ba mức nhẹ / vừa / mạnh = [mincutoff (Hz), beta] */
-const SMOOTH = [[3.0, 0.05], [1.8, 0.03], [1.0, 0.015]];
+const SMOOTH = [[3.4, 0.065], [2.1, 0.038], [1.15, 0.018]];
 function oneEuro(mincutoff, beta){
   const dc = 1.0; let xp = null, dxp = 0, tp = 0;
   const alpha = (cut, dt) => { const te = 1 / (TAU * cut); return 1 / (1 + te / dt); };
@@ -1919,18 +2326,27 @@ function oneEuro(mincutoff, beta){
   fn.reset = (x, t) => { xp = x; dxp = 0; tp = t; };
   return fn;
 }
+function sCurvePressure(p){
+  const x = clamp(p, 0.04, 1);
+  return x * x * (3 - 2 * x);
+}
 function penFactor(a, ev, dx, dy, d, dt){
   if (!a.vw) return 1;
-  const v = clamp(d / Math.max(dt, 1) / 1.5, 0, 1), hasP = a.ptype === 'pen', p = hasP ? Math.pow(clamp(ev.pressure || 0.5, 0.05, 1), 0.75) : 0.5;
-  if (a.style === 'fountain') return hasP ? (0.4 + 1.2 * p) * (1.05 - 0.25 * v) : 1.25 - 0.7 * v;
-  const u = d > 0 ? dy / d : 0, dir = 0.62 + (u > 0 ? 0.8 * u : 0.2 * u);   /* kéo xuống: đậm, đưa lên: thanh */
-  return dir * (hasP ? 0.65 + 0.6 * p : 1) * (1.08 - 0.2 * v);
+  const v = clamp(d / Math.max(dt, 1) / 1.65, 0, 1);
+  const hasP = a.ptype === 'pen';
+  const p = hasP ? Math.pow(sCurvePressure(ev.pressure || 0.5), 0.82) : 0.5;
+  if (a.style === 'fountain') return hasP ? (0.34 + 1.28 * p) * (1.06 - 0.28 * v) : 1.22 - 0.65 * v;
+  const u = d > 0 ? dy / d : 0, dir = 0.58 + (u > 0 ? 0.85 * u : 0.22 * u);   /* kéo xuống: đậm, đưa lên: thanh */
+  return dir * (hasP ? 0.62 + 0.65 * p : 1) * (1.08 - 0.22 * v);
 }
 function startStroke(b, w, e, hl, shape){
   const style = (hl || shape) ? 'ball' : ui.penStyle, vw = style !== 'ball';
-  act = {...b, kind:'stroke', pts: [r4(w.x), r4(w.y), vw ? 0.75 : 0.5], hl, shape, style, vw, f: 0.75,
-         w: (shape ? 2.2 : INK_W[ui.penW]) / view.k * (hl ? 5 : 1), color: shape ? 'ink' : ui.penColor, ex: oneEuro(SMOOTH[ui.smooth][0], SMOOTH[ui.smooth][1]), ey: oneEuro(SMOOTH[ui.smooth][0], SMOOTH[ui.smooth][1]), raw: [w.x, w.y, w.x, w.y], rpx: b.sx, rpy: b.sy, rvx: 0, rvy: 0, rvl: 0,
-         len: 0, ax: b.sx, ay: b.sy, lsx: b.sx, lsy: b.sy, fx: b.sx, fy: b.sy, rx: b.sx, ry: b.sy, lt: e.timeStamp || 0, holdT: 0};
+  const f0 = vw ? (e.pointerType === 'pen' ? clamp(0.38 + 0.9 * sCurvePressure(e.pressure || 0.5), 0.35, 1.3) : 0.72) : 0.5;
+  act = {...b, kind:'stroke', pts: [r4(w.x), r4(w.y), r4(f0)], pred: null, hl, shape, style, vw, f: f0,
+         w: (shape ? 2.2 : INK_W[ui.penW]) / view.k * (hl ? 5 : 1), color: shape ? 'ink' : ui.penColor,
+         ex: oneEuro(SMOOTH[ui.smooth][0], SMOOTH[ui.smooth][1]), ey: oneEuro(SMOOTH[ui.smooth][0], SMOOTH[ui.smooth][1]),
+         raw: [w.x, w.y, w.x, w.y], rpx: b.sx, rpy: b.sy, rvx: 0, rvy: 0, rvl: 0, lastV: 0,
+         len: 0, ax: b.sx, ay: b.sy, lsx: b.sx, lsy: b.sy, fx: b.sx, fy: b.sy, rx: b.sx, ry: b.sy, lt: e.timeStamp || performance.now(), holdT: 0};
   drawOverlay();
 }
 function strokeMove(e){
@@ -1939,43 +2355,41 @@ function strokeMove(e){
     const s = pos(ev); act.rx = s.x; act.ry = s.y;
     if (hyp(s.x - act.ax, s.y - act.ay) > 7){
       act.ax = s.x; act.ay = s.y; clearTimeout(act.holdT);
-      if (act.len > 60 && !act.shape && ui.snap) act.holdT = setTimeout(holdSnap, 520);
+      if (act.len > 60 && !act.shape && ui.snap) act.holdT = setTimeout(holdSnap, 500);
     }
-    /* Góc gấp: bút đổi hướng đột ngột (trên ~100°) thì ghi đúng đỉnh góc và đặt lại bộ lọc, để góc chữ không bị bo tròn vì độ trễ lọc */
     const t0 = ev.timeStamp || performance.now();
     { const rvx = s.x - act.rpx, rvy = s.y - act.rpy, lr = hyp(rvx, rvy);
       if (lr > 1.2 && act.rvl > 1.2 && (rvx * act.rvx + rvy * act.rvy) < -0.17 * lr * act.rvl && !act.hl){
-        const w0 = toWorld(act.rpx, act.rpy); act.pts.push(r4(w0.x), r4(w0.y), act.vw ? Math.round(act.f * 100) / 100 : 0.5); liveSeg(act, act.pts.length - 3);
+        const w0 = toWorld(act.rpx, act.rpy); act.pts.push(r4(w0.x), r4(w0.y), act.vw ? Math.round(act.f * 100) / 100 : 0.5);
         act.ex.reset(act.rpx, t0); act.ey.reset(act.rpy, t0); act.fx = act.rpx; act.fy = act.rpy; act.lsx = act.rpx; act.lsy = act.rpy; act.apex = true;
       }
       if (lr > 0.5){ act.rvx = rvx; act.rvy = rvy; act.rvl = lr; act.rpx = s.x; act.rpy = s.y; } }
-    /* Khử rung: điểm vẽ bám theo đầu bút qua một bộ lọc trơn */
     act.fx = act.ex(s.x, t0); act.fy = act.ey(s.y, t0);
-    const dx = act.fx - act.lsx, dy = act.fy - act.lsy, d = hyp(dx, dy); if (d < 1) continue;
-    const t = ev.timeStamp || 0, dt = t - act.lt; act.lt = t;
-    act.f += (clamp(penFactor(act, ev, dx, dy, d, dt), 0.3, 1.8) - act.f) * 0.22;
+    const dx = act.fx - act.lsx, dy = act.fy - act.lsy, d = hyp(dx, dy); if (d < 0.65) continue;
+    const dt = Math.max(1, t0 - act.lt); act.lt = t0; act.lastV = d / dt;
+    act.f += (clamp(penFactor(act, ev, dx, dy, d, dt), 0.26, 1.85) - act.f) * 0.28;
     const w = toWorld(act.fx, act.fy), P = act.pts, n = P.length, q = act.raw;
-    /* Làm trơn thêm một nhịp: điểm liền trước được thay bằng trung bình có trọng số với hai điểm kề nó */
     if (n >= 6 && !act.apex){ P[n - 3] = r4((q[0] + 2 * q[2] + w.x) / 4); P[n - 2] = r4((q[1] + 2 * q[3] + w.y) / 4); }
     act.apex = false; q[0] = q[2]; q[1] = q[3]; q[2] = w.x; q[3] = w.y;
     P.push(r4(w.x), r4(w.y), act.vw ? Math.round(act.f * 100) / 100 : 0.5); act.len += d; act.lsx = act.fx; act.lsy = act.fy;
-    /* Vẽ thêm đúng đoạn mới lên lớp phủ, không vẽ lại cả nét (nét dài không còn chậm dần) */
-    if (!act.hl) liveSeg(act, n);
   }
-  if (act.hl) redrawOver();
-}
-/* Đoạn từ điểm n-1 tới điểm n của nét đang viết. Nét thanh đậm: vẽ hình thang nối hai bề rộng, cộng hai nút tròn ở hai đầu */
-function liveSeg(a, n){
-  const P = a.pts; if (n < 3) return;
-  const x0 = P[n - 3], y0 = P[n - 2], f0 = P[n - 1], x1 = P[n], y1 = P[n + 1], f1 = P[n + 2];
-  octx.save(); octx.setTransform(DPR * view.k, 0, 0, -DPR * view.k, DPR * view.x, DPR * view.y);
-  const c = col(a.color, ui.paper); octx.fillStyle = c; octx.strokeStyle = c; octx.setLineDash([]); octx.lineCap = 'round';
-  if (!a.vw){ octx.lineWidth = a.w; octx.beginPath(); octx.moveTo(x0, y0); octx.lineTo(x1, y1); octx.stroke(); octx.restore(); return; }
-  const w0 = a.w * widthOf(a, f0) / 2, w1 = a.w * widthOf(a, f1) / 2, dx = x1 - x0, dy = y1 - y0, d = hyp(dx, dy) || 1, nx = -dy / d, ny = dx / d;
-  octx.beginPath(); octx.moveTo(x0 + nx * w0, y0 + ny * w0); octx.lineTo(x1 + nx * w1, y1 + ny * w1); octx.lineTo(x1 - nx * w1, y1 - ny * w1); octx.lineTo(x0 - nx * w0, y0 - ny * w0); octx.closePath(); octx.fill();
-  octx.beginPath(); octx.arc(x1, y1, w1, 0, TAU); octx.fill();
-  if (n === 3){ octx.beginPath(); octx.arc(x0, y0, w0, 0, TAU); octx.fill(); }
-  octx.restore();
+  /* Điểm dự đoán đầu bút (Predicted Tail) giúp mực bám sát ngòi S Pen với độ trễ = 0 */
+  const preds = (!act.shape && e.getPredictedEvents && e.getPredictedEvents()) || [];
+  const tail = [];
+  const gap = hyp(act.rx - act.lsx, act.ry - act.lsy);
+  if (gap > 0.8){
+    const wRaw = toWorld(act.rx, act.ry);
+    tail.push(r4(wRaw.x), r4(wRaw.y), act.vw ? Math.round(act.f * 0.92 * 100) / 100 : 0.5);
+  }
+  if (preds.length){
+    const pe = preds[Math.min(1, preds.length - 1)], ps = pos(pe);
+    if (hyp(ps.x - act.rx, ps.y - act.ry) < 28){
+      const wp = toWorld(ps.x, ps.y);
+      tail.push(r4(wp.x), r4(wp.y), act.vw ? Math.round(act.f * 0.82 * 100) / 100 : 0.5);
+    }
+  }
+  act.pred = tail.length ? tail : null;
+  redrawOver();
 }
 function mkStroke(a, pts, poly, vw){
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -1984,7 +2398,6 @@ function mkStroke(a, pts, poly, vw){
   if (vw) o.vw = 1; if (poly) o.poly = true; if (a.hl) o.hl = true;
   return o;
 }
-/* Nắn nét: lưu nét gốc thành một bước riêng, để Hoàn tác trả lại đúng nét đã viết */
 function holdSnap(){
   if (!act || act.kind !== 'stroke' || !ui.snap) return;
   const r = beautify(act.pts); if (!r) return;
@@ -2000,33 +2413,27 @@ function addStroke(a, pts, poly, vw){
   clearTimeout(scrollT);
   if (ui.autoScroll && !a.hl && a.ptype !== 'mouse' && a.lsy > H - Math.min(110, H * 0.14)) scrollT = setTimeout(autoScroll, 900);
 }
-/* Căn chữ theo dòng: sau khi dừng bút nửa giây, nhóm nét vừa viết được xoay cho hết nghiêng,
-   và nếu có dòng kẻ thì chân chữ (baseline) bám vào dòng kẻ gần nhất. Một bước hoàn tác riêng. */
 function alignWord(){
   const ids = wordBuf; wordBuf = [];
   if (act && act.kind === 'stroke') return;
   const strokes = ids.map(id => BY.get(id)).filter(o => o && o.type === 'stroke');
   if (!strokes.length) return;
-  /* chân và đỉnh của từng nét (tọa độ thế giới, y hướng lên) */
   const bots = [], tops = []; let x0 = Infinity, x1 = -Infinity;
   for (const o of strokes){ const ox = o.ox || 0, oy = o.oy || 0; bots.push({x: (o.bb[0] + o.bb[2]) / 2 + ox, y: o.bb[1] + oy, h: o.bb[3] - o.bb[1]}); tops.push(o.bb[3] + oy); x0 = Math.min(x0, o.bb[0] + ox); x1 = Math.max(x1, o.bb[2] + ox); }
   const med = (a) => { const s = a.slice().sort((p, q) => p - q); return s[Math.floor(s.length / 2)]; };
   const hMed = med(bots.map(b => b.h)) || 0.3;
-  /* Chỉ căn khi đó thật sự là một cụm chữ: ít nhất 2 nét và trải ngang rõ rệt; một nét lẻ (dấu chấm, gạch) để yên */
   if (strokes.length < 2 || x1 - x0 < 1.6 * hMed) return;
-  /* bỏ nét có đuôi thấp hơn hẳn (g, y, p, dấu phẩy) khi tìm baseline */
   const yMed = med(bots.map(b => b.y)), base = bots.filter(b => b.y > yMed - 0.6 * hMed);
   let ang = 0;
   if (base.length >= 3 && x1 - x0 > 2.5 * hMed){
     let sx = 0, sy = 0, sxx = 0, sxy = 0; for (const b of base){ sx += b.x; sy += b.y; sxx += b.x * b.x; sxy += b.x * b.y; }
     const n = base.length, den = n * sxx - sx * sx; if (Math.abs(den) > 1e-9) ang = Math.atan((n * sxy - sx * sy) / den);
-    if (Math.abs(ang) > 0.17 || Math.abs(ang) < 0.012) ang = 0;   /* nghiêng quá 10° là cố ý, dưới 0,7° không đáng sửa */
+    if (Math.abs(ang) > 0.17 || Math.abs(ang) < 0.012) ang = 0;
   }
   const baseY = med(base.map(b => b.y));
   let dy = 0;
   if (ui.rule === 'ruled' || ui.rule === 'grid'){
     let step = 1; while (step * view.k < 11) step *= 2;
-    /* Mức Nhẹ chỉ kéo khi chân chữ đã rất gần dòng kẻ (dưới 18% khoảng dòng); mức Mạnh kéo trong 35% */
     const lim = ui.align === 'strong' ? 0.35 : 0.18, target = Math.round(baseY / step) * step;
     if (Math.abs(target - baseY) < lim * step && Math.abs(target - baseY) > 0.01 * step) dy = target - baseY;
   }
@@ -2043,7 +2450,6 @@ function alignWord(){
   }
   compute(); redraw(); save();
 }
-/* Viết sát mép dưới: sau khi dừng bút gần một giây, trang tự cuộn lên để có chỗ viết tiếp */
 function autoScroll(){
   if (act) return;
   const d = Math.round(H * 0.4), t0 = performance.now(), y0 = view.y;
@@ -2053,33 +2459,38 @@ function autoScroll(){
 function endStroke(a){
   clearTimeout(a.holdT);
   const p = a.pts;
-  /* Nối nốt đoạn bộ lọc còn chậm so với đầu bút */
   const gx = a.rx - a.lsx, gy = a.ry - a.lsy, g = hyp(gx, gy);
-  if (g > 1.5){ const m = Math.min(4, Math.ceil(g / 3)); for (let i = 1; i <= m; i++){ const w = toWorld(a.lsx + gx * i / m, a.lsy + gy * i / m); p.push(r4(w.x), r4(w.y), a.vw ? Math.round(a.f * 100) / 100 : 0.5); } }
+  const flick = a.vw && a.lastV > 0.85;
+  if (g > 1.2){
+    const m = Math.min(4, Math.ceil(g / 2.8));
+    for (let i = 1; i <= m; i++){
+      const w = toWorld(a.lsx + gx * i / m, a.lsy + gy * i / m);
+      const tf = flick ? a.f * (1 - 0.65 * (i / m)) : a.f;
+      p.push(r4(w.x), r4(w.y), a.vw ? Math.round(Math.max(0.18, tf) * 100) / 100 : 0.5);
+    }
+  }
   if (a.shape){
     const r = recognize(p);
     if (r){ const snap = snapshot(); buildShape(r); pushUndo(snap); commit(); }
     else { toast('Chưa nhận ra hình. Hãy vẽ đoạn thẳng, đường tròn, tam giác hoặc tứ giác.'); redrawOver(); }
     return;
   }
-  addStroke(a, a.hl ? p : refineStroke(p, a.vw), false, a.vw);
+  addStroke(a, a.hl ? p : refineStroke(p, a.vw, flick), false, a.vw);
 }
-/* Làm mềm nét khi nhấc bút, nhưng giữ góc gấp: tìm các chỗ đổi hướng trên 55° (góc chữ nguệch ngoạc, đỉnh chữ M, V, 1, 7…)
-   làm khớp cứng, chỉ nối cong và làm mịn từng đoạn giữa hai khớp; vuốt thon hai đầu nét */
-function refineStroke(flat, vw){
+function refineStroke(flat, vw, flick){
   const n = flat.length / 3; if (n < 3 || ui.soft === false) return flat;
   const P = []; for (let i = 0; i < n; i++) P.push({x: flat[i * 3], y: flat[i * 3 + 1], f: flat[i * 3 + 2]});
-  const reach = 4 / view.k, corner = [0];
+  const reach = 3.8 / view.k, corner = [0];
   for (let i = 1; i < n - 1; i++){
     let a = i - 1; while (a > 0 && hyp(P[a].x - P[i].x, P[a].y - P[i].y) < reach) a--;
     let b = i + 1; while (b < n - 1 && hyp(P[b].x - P[i].x, P[b].y - P[i].y) < reach) b++;
     const ux = P[i].x - P[a].x, uy = P[i].y - P[a].y, vx = P[b].x - P[i].x, vy = P[b].y - P[i].y, lu = hyp(ux, uy), lv = hyp(vx, vy);
     if (lu < reach * 0.5 || lv < reach * 0.5) continue;
     const ang = Math.acos(clamp((ux * vx + uy * vy) / (lu * lv), -1, 1));
-    if (ang > 0.96 && i - corner[corner.length - 1] > 1){ corner.push(i); }
+    if (ang > 0.92 && i - corner[corner.length - 1] > 1){ corner.push(i); }
   }
   corner.push(n - 1);
-  const step = 1.5 / view.k, out = [];
+  const step = 1.35 / view.k, out = [];
   const cr = (p0, p1, p2, p3, t, k) => { const t2 = t * t, t3 = t2 * t; return 0.5 * ((2 * p1[k]) + (-p0[k] + p2[k]) * t + (2 * p0[k] - 5 * p1[k] + 4 * p2[k] - p3[k]) * t2 + (-p0[k] + 3 * p1[k] - 3 * p2[k] + p3[k]) * t3); };
   for (let s = 0; s < corner.length - 1; s++){
     const i0 = corner[s], i1 = corner[s + 1], seg = [];
@@ -2089,12 +2500,11 @@ function refineStroke(flat, vw){
       for (let j = 0; j < m; j++){ const t = j / m; seg.push({x: cr(p0, p1, p2, p3, t, 'x'), y: cr(p0, p1, p2, p3, t, 'y'), f: p1.f + (p2.f - p1.f) * t}); }
     }
     seg.push(P[i1]);
-    /* làm mịn [1 2 1] bên trong đoạn; hai đầu đoạn (khớp cứng) giữ nguyên */
     const N = seg.length;
     for (let i = 0; i < N; i++){
       let q = seg[i];
       if (i > 0 && i < N - 1) q = {x: (seg[i - 1].x + 2 * seg[i].x + seg[i + 1].x) / 4, y: (seg[i - 1].y + 2 * seg[i].y + seg[i + 1].y) / 4, f: (seg[i - 1].f + 2 * seg[i].f + seg[i + 1].f) / 4};
-      if (s > 0 && i === 0) continue;   /* khớp đã có từ đoạn trước */
+      if (s > 0 && i === 0) continue;
       out.push(q);
     }
   }
@@ -2102,8 +2512,10 @@ function refineStroke(flat, vw){
   for (let i = 0; i < N; i++){ res[i * 3] = r4(out[i].x); res[i * 3 + 1] = r4(out[i].y); res[i * 3 + 2] = vw ? Math.round(out[i].f * 100) / 100 : 0.5; }
   if (vw){
     const tap = (idx, k) => { res[idx * 3 + 2] = Math.round(res[idx * 3 + 2] * k * 100) / 100; };
-    const ne = Math.min(6, Math.floor(N / 3));
-    for (let j = 0; j < ne; j++){ const k = 0.45 + 0.55 * (j + 1) / (ne + 1); tap(j, k); tap(N - 1 - j, k); }
+    const ne = Math.min(5, Math.floor(N / 3));
+    for (let j = 0; j < ne; j++){ const k = 0.5 + 0.5 * (j + 1) / (ne + 1); tap(j, k); }
+    const tailN = flick ? Math.min(10, Math.floor(N / 2)) : ne;
+    for (let j = 0; j < tailN; j++){ const k = (flick ? 0.22 : 0.48) + (flick ? 0.78 : 0.52) * (j + 1) / (tailN + 1); tap(N - 1 - j, k); }
   }
   return res;
 }
@@ -2265,6 +2677,7 @@ function startRotate(b, w, tol){
   act = {...b, kind:'rot', pts: dragPts(h).filter(p => p.id !== rotC), ang: Math.atan2(w.y - c.y, w.x - c.x), moved: false};
 }
 function onDown(e){
+  if (mathState && mathState.open) closeMathEditor(true);
   e.preventDefault(); closePopups();
   if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur();
   try { over.setPointerCapture(e.pointerId); } catch (_) {}
@@ -2431,6 +2844,15 @@ over.addEventListener('contextmenu', (e) => {
   if (h){ if (ui.tool !== 'move') setTool('move'); select(h.id); }
 });
 over.addEventListener('wheel', (e) => { e.preventDefault(); zoomAt(pos(e), Math.exp(-e.deltaY * 0.0015)); redraw(); save(); }, {passive: false});
+over.addEventListener('dblclick', (e) => {
+  const s = pos(e), w = toWorld(s.x, s.y), tol = TOL / view.k;
+  for (let i = S.objs.length - 1; i >= 0; i--){
+    const o = S.objs[i]; if (o.type === 'text' && shown(o) && inText(o, w)){ select(o.id); openMathEditor(w, o); return; }
+  }
+  if ((ui.tool === 'move' || ui.tool === 'text') && !hitAny(w, tol)){
+    openMathEditor(w, null);
+  }
+});
 /* ================= Giao diện ================= */
 const tb = $('#tb'), dd = $('#dd'), strip = $('#strip'), helpEl = $('#help'), styleBar = $('#style'), menu = $('#menu'), toastEl = $('#toast');
 const groupCur = GROUPS.map(g => g[0]);
@@ -2533,7 +2955,7 @@ function widthBtn(i, onClick){
   const b = document.createElement('button'); b.className = 'wd'; b.dataset.w = i; b.title = ['Nét mảnh', 'Nét vừa', 'Nét đậm'][i]; b.setAttribute('aria-label', b.title);
   b.innerHTML = '<i style="height:' + [2, 4, 7][i] + 'px"></i>'; b.addEventListener('click', () => onClick(i)); return b;
 }
-for (const c of COLORS.slice(0, 6)) strip.appendChild(swatch(c, (v) => { ui.penColor = v; if (!PEN_TOOLS.includes(ui.tool) || ui.tool === 'eraser') setTool('pen'); else { updateBar(); save(); } }));
+for (const c of COLORS.slice(0, 6)) strip.appendChild(swatch(c, (v) => { ui.penColor = v; if (typeof mathState !== 'undefined' && mathState.open){ mathState.color = v; updateBar(); updateMathPreview(); $('#mathIn').focus(); return; } if (!PEN_TOOLS.includes(ui.tool) || ui.tool === 'eraser') setTool('pen'); else { updateBar(); save(); } }));
 strip.appendChild(hsep());
 for (let i = 0; i < 3; i++) strip.appendChild(widthBtn(i, (v) => { ui.penW = v; updateBar(); save(); }));
 
@@ -2553,9 +2975,15 @@ $('#stLen').addEventListener('click', () => edit(o => { o.showLen = !o.showLen; 
 $('#stCoord').addEventListener('click', () => edit(o => { o.coords = !o.coords; }));
 $('#stFill').addEventListener('click', () => edit(o => { o.fill = o.fill === false; }));
 $('#stArea').addEventListener('click', () => edit(o => { o.showArea = !o.showArea; }));
+const TEXT_SIZES = [16, 20, 26, 34];
+const TEXT_SIZE_NAMES = {16:'Nhỏ', 20:'Vừa', 26:'Lớn', 34:'Rất lớn'};
+$('#stSize').addEventListener('click', () => edit(o => {
+  const idx = TEXT_SIZES.indexOf(o.sz || 20);
+  o.sz = TEXT_SIZES[(idx + 1) % TEXT_SIZES.length];
+}));
 $('#stEdit').addEventListener('click', () => {
   const o = BY.get(ui.sel); if (!o) return;
-  if (o.type === 'text') askText('Sửa văn bản', o.text).then(t => { if (t) edit(x => { x.text = t; }); });
+  if (o.type === 'text'){ openMathEditor({x: o.x, y: o.y}, o); }
   else if (o.type === 'func') askText('Hàm số f(x) =', o.expr).then(t => { if (!t) return; if (!compileExpr(t)){ toast('Chưa hiểu biểu thức.'); return; } edit(x => { x.expr = t; }); });
   else if (o.type === 'numline') askText('Số lớn nhất trên tia số', String(o.n)).then(t => { const n = parseInt(t); if (n >= 1 && n <= 200) edit(x => { x.n = n; }); });
   else if (o.type === 'slider') askText('Tên; nhỏ nhất; lớn nhất; bước (ví dụ: a; 0; 360; 0.5)', o.name + '; ' + o.min + '; ' + o.max + '; ' + o.step).then(t => {
@@ -2602,7 +3030,8 @@ function updateStyle(){
   const po = !!o && o.type === 'poly', tx = !!o && o.type === 'text', sl = !!o && o.type === 'slider', nl = !!o && o.type === 'numline', fn = !!o && o.type === 'func';
   const onPt = pt && o.def && o.def.kind === 'on', movable = pt && (!o.def || ['on', 'polar'].includes(o.def.kind) || true);
   show('#stTicks', sg); show('#stArcs', an); show('#stMk', an); show('#stVal', an); show('#stSnip', im); show('#stHide', pt || cv || an || po || tx || sl || nl);
-  show('#stLen', sg); show('#stCoord', pt); show('#stFill', po); show('#stArea', po); show('#stEdit', tx || sl || nl || fn);
+  show('#stLen', sg); show('#stCoord', pt); show('#stFill', po); show('#stArea', po); show('#stSize', tx); show('#stEdit', tx || sl || nl || fn);
+  if (tx) $('#stSize').textContent = 'Cỡ chữ: ' + (TEXT_SIZE_NAMES[o.sz || 20] || 'Vừa');
   show('#stAnim', sl || onPt); show('#stTrace', pt); show('#stDup', m);
   if (o){ $('#stAnim').textContent = o.anim ? 'Dừng' : 'Chạy'; $('#stAnim').setAttribute('aria-pressed', String(!!o.anim)); $('#stTrace').setAttribute('aria-pressed', String(!!o.trace)); }
   if (o){ $('#stLen').setAttribute('aria-pressed', String(!!o.showLen)); $('#stCoord').setAttribute('aria-pressed', String(!!o.coords)); $('#stFill').setAttribute('aria-pressed', String(o.fill !== false)); $('#stArea').setAttribute('aria-pressed', String(!!o.showArea)); }
@@ -2654,6 +3083,491 @@ function askNumber(q){
 $('#askOk').addEventListener('click', () => askDone && askDone(true));
 $('#askNo').addEventListener('click', () => askDone && askDone(false));
 $('#askIn').addEventListener('keydown', (e) => { if (e.key === 'Enter') askDone && askDone(true); else if (e.key === 'Escape') askDone && askDone(false); e.stopPropagation(); });
+
+/* ----- Gõ trực tiếp trên mặt bảng (In-place Direct Canvas Typing) + Auto-Math ----- */
+const BS = String.fromCharCode(92); /* Ký tự '\' an toàn tuyệt đối, không bao giờ bị lỗi escape */
+const RIBBON_MAIN = [
+  {lbl:'a/b', ins: BS + 'frac{|}{}', title:'Phân số (hoặc gõ a/b rồi Space)'},
+  {lbl:'√x', ins: BS + 'sqrt{|}', title:'Căn bậc hai (hoặc gõ sqrt rồi Space)'},
+  {lbl:'ⁿ√x', ins: BS + 'sqrt[3]{|}', title:'Căn bậc n'},
+  {lbl:'x²', ins:'^{2}', title:'Bình phương'},
+  {lbl:'xⁿ', ins:'^{|}', title:'Số mũ'},
+  {lbl:'x₁', ins:'_{1}', title:'Chỉ số 1'},
+  {lbl:'xₙ', ins:'_{|}', title:'Chỉ số dưới'},
+  {lbl:'{hệ', ins: BS + 'he{|; }', title:'Hệ phương trình (hoặc gõ he rồi Space; bấm Enter để thêm dòng)'},
+  {lbl:'[hoặc', ins: BS + 'hoac{|; }', title:'Hoặc (ngoặc vuông; bấm Enter để thêm dòng)'},
+  {lbl:'→AB', ins: BS + 'vec{|}', title:'Véc tơ (hoặc gõ vec rồi Space)'},
+  {lbl:'ÂBC', ins: BS + 'hat{|}', title:'Góc (hoặc gõ goc rồi Space)'},
+  {lbl:'|x|', ins: BS + 'abs{|}', title:'Giá trị tuyệt đối'},
+  {lbl:'⇔', ins:' ⇔ '}, {lbl:'⇒', ins:' ⇒ '}, {lbl:'≤', ins:' ≤ '}, {lbl:'≥', ins:' ≥ '},
+  {lbl:'≠', ins:' ≠ '}, {lbl:'±', ins:' ± '}, {lbl:'·', ins:' · '}, {lbl:'⊥', ins:' ⊥ '},
+  {lbl:'∥', ins:' ∥ '}, {lbl:'△', ins:'△'}, {lbl:'∠', ins:'∠'}, {lbl:'°', ins:'°'},
+  {lbl:'Δ', ins:'Δ'}, {lbl:'π', ins:'π'}, {lbl:'α', ins:'α'}, {lbl:'β', ins:'β'}, {lbl:'∈', ins:' ∈ '}, {lbl:'⊂', ins:' ⊂ '}
+];
+const RIBBON_TPL = [
+  {lbl:'Δ=b²-4ac', ins:'Δ = b^{2} - 4ac', sans:true},
+  {lbl:'Nghiệm PT', ins:'x_{1,2} = ' + BS + 'frac{-b ± ' + BS + 'sqrt{Δ}}{2a}', sans:true},
+  {lbl:'Vi-ét', ins: BS + 'he{x_1 + x_2 = ' + BS + 'frac{-b}{a}; x_1 x_2 = ' + BS + 'frac{c}{a}}', sans:true},
+  {lbl:'Pytago', ins:'AB^{2} + AC^{2} = BC^{2}', sans:true},
+  {lbl:'Hệ thức lượng', ins:'AH^{2} = BH · CH', sans:true},
+  {lbl:'Xét △', ins:'Xét △ABC và △DEF có:', sans:true},
+  {lbl:'Sin/Cos', ins: BS + 'sin ' + BS + 'hat{A} = ' + BS + 'frac{BC}{AB}', sans:true}
+];
+const AUTO_WORDS = {
+  'sqrt': BS + 'sqrt{|}',
+  'can': BS + 'sqrt{|}',
+  'cbrt': BS + 'sqrt[3]{|}',
+  'frac': BS + 'frac{|}{}',
+  'ps': BS + 'frac{|}{}',
+  'he': BS + 'he{|; }',
+  'hoac': BS + 'hoac{|; }',
+  'vec': BS + 'vec{|}',
+  'hat': BS + 'hat{|}',
+  'goc': BS + 'hat{|}',
+  'bar': BS + 'bar{|}',
+  'abs': BS + 'abs{|}',
+  'delta': 'Δ', 'Delta': 'Δ', 'alpha': 'α', 'beta': 'β', 'gamma': 'γ',
+  'phi': 'φ', 'pi': 'π', 'omega': 'ω', 'perp': '⊥', 'para': '∥',
+  'deg': '°', 'tamgiac': '△', 'tg': '△', 'thuoc': '∈', 'kothuoc': '∉',
+  'con': '⊂', 'hop': '∪', 'giao': '∩', 'rong': '∅', 'vc': '∞', 'inf': '∞',
+  'suyra': '⇒', 'td': '⇔'
+};
+/* Các từ trùng với chữ thường (giao điểm, con, can, hop, rong, bar…) chỉ biến đổi khi gõ kèm dấu \ phía trước, ví dụ \giao */
+const NEED_SLASH = new Set(['con', 'giao', 'can', 'hop', 'rong', 'bar']);
+
+let mathState = {open: false, oid: null, wx: 0, wy: 0, sz: 20, color: 'ink', showTpl: false, blink: true, blinkT: 0};
+
+/* Chặn sự kiện chạm trên khung gõ không bị rơi xuống canvas làm đóng khung gõ */
+$('#mathEd').addEventListener('pointerdown', (e) => e.stopPropagation());
+
+function renderMathBar(){
+  const rb = $('#mathRibbon'); if (!rb) return;
+  rb.innerHTML = '';
+  const mkBtn = (lbl, title, cls, fn) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'mb' + (cls ? ' ' + cls : '');
+    b.textContent = lbl; if (title) b.title = title;
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); });
+    b.addEventListener('click', (e) => { e.stopPropagation(); fn(); });
+    rb.appendChild(b);
+  };
+  mkBtn('✓ Xong', 'Chèn lên bảng (Ctrl+Enter)', 'sans act', () => closeMathEditor(true));
+  mkBtn('⇥', 'Sang ô tiếp theo: thoát khỏi phân số, căn, mũ, hệ… (phím Tab)', 'sans', () => { jumpNextSlot(); $('#mathIn').focus(); });
+  mkBtn('A−', 'Giảm cỡ chữ', 'sans', () => {
+    const idx = Math.max(0, TEXT_SIZES.indexOf(mathState.sz) - 1);
+    mathState.sz = TEXT_SIZES[idx >= 0 ? idx : 0]; updateMathPreview(); $('#mathIn').focus();
+  });
+  mkBtn('A+', 'Tăng cỡ chữ', 'sans', () => {
+    const cur = TEXT_SIZES.indexOf(mathState.sz);
+    const idx = Math.min(TEXT_SIZES.length - 1, (cur >= 0 ? cur : 1) + 1);
+    mathState.sz = TEXT_SIZES[idx]; updateMathPreview(); $('#mathIn').focus();
+  });
+  mkBtn(mathState.showTpl ? 'Ký hiệu' : 'Mẫu nhanh', 'Chuyển đổi giữa Ký hiệu và Mẫu công thức THCS/THPT', 'sans' + (mathState.showTpl ? ' act' : ''), () => {
+    mathState.showTpl = !mathState.showTpl; renderMathBar(); $('#mathIn').focus();
+  });
+  const list = mathState.showTpl ? RIBBON_TPL : RIBBON_MAIN;
+  for (const it of list){
+    mkBtn(it.lbl, it.title || '', it.sans ? 'sans' : '', () => insertMathSnippet(it.ins));
+  }
+}
+
+function insertMathSnippet(ins){
+  const ta = $('#mathIn'); if (!ta) return;
+  const s = ta.selectionStart || 0, e = ta.selectionEnd || 0, val = ta.value;
+  const sel = val.slice(s, e);
+  const curIdx = ins.indexOf('|');
+  let out, pos;
+  if (curIdx >= 0){
+    const before = ins.slice(0, curIdx), after = ins.slice(curIdx + 1);
+    out = val.slice(0, s) + before + sel + after + val.slice(e);
+    pos = s + before.length + (sel.length ? sel.length : 0);
+  } else {
+    out = val.slice(0, s) + ins + val.slice(e);
+    pos = s + ins.length;
+  }
+  ta.value = out; ta.focus(); ta.setSelectionRange(pos, pos);
+  resetBlink(); updateMathPreview();
+}
+
+function syncMathPos(){
+  if (!mathState.open) return;
+  const ed = $('#mathEd'), rb = $('#mathRibbon');
+  const sx = view.x + mathState.wx * view.k, sy = view.y - mathState.wy * view.k;
+  ed.style.left = Math.round(sx - 8) + 'px';
+  ed.style.top = Math.round(sy - 4) + 'px';
+  if (rb){
+    rb.classList.toggle('below', sy < 118);
+    const maxShift = Math.max(0, (sx - 8) + rb.offsetWidth - (W - 12));
+    rb.style.left = (maxShift > 0 ? -Math.min(sx - 12, maxShift) : 0) + 'px';
+  }
+  /* Giữ ô gõ trong vùng nhìn thấy: không tràn mép phải, không bị bàn phím ảo che. Nếu tràn thì cuộn bảng theo */
+  const box = $('#mathBox'), raw = $('#mathRawBar');
+  if (box && !mathState.panning){
+    const r = box.getBoundingClientRect(), vv = window.visualViewport;
+    const bottom = (vv ? vv.offsetTop + vv.height : innerHeight) - 10, right = (vv ? vv.offsetLeft + vv.width : innerWidth) - 10;
+    const extra = raw && !raw.hidden ? raw.offsetHeight + 6 : 0;
+    let dx = 0, dy = 0;
+    if (r.bottom + extra > bottom) dy = Math.min(r.bottom + extra - bottom, Math.max(0, r.top - 120));
+    if (r.right > right) dx = Math.min(r.right - right, Math.max(0, r.left - 80));
+    if (dx > 0.5 || dy > 0.5){ view.x -= dx; view.y -= dy; mathState.panning = true; redraw(); syncMathPos(); mathState.panning = false; }
+  }
+}
+if (window.visualViewport) visualViewport.addEventListener('resize', () => { if (mathState.open) syncMathPos(); });
+
+function resetBlink(){
+  mathState.blink = true;
+  clearInterval(mathState.blinkT);
+  mathState.blinkT = setInterval(() => {
+    if (!mathState.open){ clearInterval(mathState.blinkT); return; }
+    mathState.blink = !mathState.blink;
+    updateMathPreview(true);
+  }, 530);
+}
+
+function updateMathPreview(){
+  if (!mathState.open) return;
+  const c = $('#mathPrev'), ta = $('#mathIn'), rawBar = $('#mathRawBar');
+  if (!c || !ta) return;
+  const val = ta.value, selPos = ta.selectionStart != null ? ta.selectionStart : val.length;
+  const lay = layoutMathBlock(val || ' ', mathState.sz);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  const cw = Math.max(150, Math.ceil(lay.w + 24)), ch = Math.max(Math.ceil(mathState.sz * 1.45), Math.ceil(lay.h + 10));
+  if (c.width !== Math.round(cw * dpr) || c.height !== Math.round(ch * dpr)){
+    c.width = Math.round(cw * dpr); c.height = Math.round(ch * dpr);
+    c.style.width = cw + 'px'; c.style.height = ch + 'px';
+  }
+  const cx = c.getContext('2d');
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  cx.clearRect(0, 0, cw, ch);
+  const color = col(mathState.color || ui.penColor || 'ink', ui.paper);
+  if (!val){
+    cx.font = mathFont(mathState.sz * 0.85, true);
+    cx.fillStyle = ui.paper === 'board' ? 'rgba(255,255,255,.38)' : 'rgba(0,0,0,.32)';
+    cx.textBaseline = 'alphabetic';
+    cx.fillText('Gõ chữ / công thức…', 8, 4 + mathState.sz * 0.82);
+  } else {
+    for (const ln of lay.lines) renderMathNode(cx, ln, 6, 4 + ln.yOff, color);
+  }
+  if (mathState.blink){
+    const caret = findCaretPos(val, selPos, mathState.sz);
+    cx.strokeStyle = ui.paper === 'board' ? '#86cbb4' : '#2f5d50';
+    cx.lineWidth = 2;
+    cx.beginPath();
+    cx.moveTo(6 + caret.x, 4 + caret.y - caret.h * 0.78);
+    cx.lineTo(6 + caret.x, 4 + caret.y + caret.h * 0.24);
+    cx.stroke();
+  }
+  const hasStruct = val.includes(BS) || /[{}^_]/.test(val);
+  if (rawBar){
+    if (hasStruct){
+      rawBar.hidden = false;
+      rawBar.innerHTML = esc(val.slice(0, selPos)) + '<b>|</b>' + esc(val.slice(selPos));
+    } else rawBar.hidden = true;
+  }
+  syncMathPos();
+}
+
+function findCaretPos(text, pos, sz){
+  if (!text) return {x: 2, y: sz * 0.82, h: sz};
+  const MARK_CH = '\uFFFC';
+  const marked = text.slice(0, pos) + MARK_CH + text.slice(pos);
+  const lay = layoutMathBlock(marked, sz);
+  let found = null;
+  function walk(b, x, y){
+    if (found) return;
+    if (b.k === 'row'){
+      for (const it of b.items) walk(it, x + it.dx, y);
+    } else if (b.k === 'txt'){
+      const idx = b.v ? b.v.indexOf(MARK_CH) : -1;
+      if (idx >= 0){
+        const pre = b.v.slice(0, idx);
+        const wPre = pre ? measureRun(pre, b.sz).w : 0;
+        found = {x: x + wPre, y, h: b.sz};
+      }
+    } else if (b.k === 'frac'){
+      const by = y - b.axis;
+      walk(b.num, x + (b.w - b.num.w) / 2, by - b.gap - b.num.desc);
+      walk(b.den, x + (b.w - b.den.w) / 2, by + b.gap + b.den.asc);
+    } else if (b.k === 'sqrt'){
+      if (b.deg) walk(b.deg, x + Math.max(0, b.padL - b.sz * 0.46 - b.deg.w), y - b.body.asc * 0.55);
+      walk(b.body, x + b.padL, y);
+    } else if (b.k === 'over'){
+      walk(b.body, x + b.sz * 0.04, y);
+    } else if (b.k === 'scripts'){
+      walk(b.base, x, y);
+      const sx = x + b.base.w + b.sz * 0.03;
+      if (b.sup) walk(b.sup, sx, y - b.supShift);
+      if (b.sub) walk(b.sub, sx, y + b.subShift);
+    } else if (b.k === 'cases'){
+      let cy = y - b.asc + b.sz * 0.04;
+      for (const r of b.rows){ cy += r.asc; walk(r, x + b.brW, cy); cy += r.desc + b.gap; }
+    } else if (b.k === 'delim'){
+      walk(b.body, x + b.pad, y);
+    }
+  }
+  for (const ln of lay.lines){ walk(ln, 0, ln.yOff); if (found) break; }
+  if (found) return found;
+  const lastLn = lay.lines[lay.lines.length - 1];
+  return {x: lastLn ? lastLn.w : 2, y: lastLn ? lastLn.yOff : sz * 0.82, h: sz};
+}
+
+function openMathEditor(w, existingObj){
+  if (mathState.open) closeMathEditor(true);
+  closePopups();
+  const ed = $('#mathEd'), ta = $('#mathIn');
+  mathState.open = true;
+  if (existingObj){
+    mathState.oid = existingObj.id;
+    mathState.wx = existingObj.x; mathState.wy = existingObj.y;
+    mathState.sz = existingObj.sz || 20;
+    mathState.color = existingObj.color || ui.penColor || 'ink';
+    mathState.origText = existingObj.text;
+    mathState.origSz = existingObj.sz || 20;
+    mathState.origColor = existingObj.color || 'ink';
+    ta.value = existingObj.text || '';
+    redraw();
+  } else {
+    mathState.oid = null;
+    mathState.wx = r4(w.x); mathState.wy = r4(w.y);
+    mathState.color = ui.penColor || 'ink';
+    ta.value = '';
+  }
+  renderMathBar();
+  ed.hidden = false;
+  resetBlink();
+  updateMathPreview();
+  setTimeout(() => {
+    ta.focus();
+    const len = ta.value.length;
+    ta.setSelectionRange(len, len);
+    updateMathPreview();
+  }, 15);
+  /* Android chỉ bật bàn phím ảo khi focus sau lúc nhấc tay hoặc nhấc bút, nên focus lại một lần ở pointerup */
+  const refocus = () => {
+    removeEventListener('pointerup', refocus, true);
+    if (!mathState.open) return;
+    const c = ta.selectionStart;
+    if (document.activeElement === ta) ta.blur();
+    ta.focus({preventScroll: true}); ta.setSelectionRange(c, c);
+  };
+  addEventListener('pointerup', refocus, true);
+}
+
+function closeMathEditor(commitChanges){
+  const ed = $('#mathEd'), ta = $('#mathIn');
+  if (!mathState.open) return;
+  mathState.open = false; ed.hidden = true;
+  clearInterval(mathState.blinkT);
+  const txt = ta.value.replace(/[\uFFFC\u200B]/g, '').trim();
+  if (mathState.oid != null){
+    const o = BY.get(mathState.oid);
+    if (o){
+      if (!commitChanges){
+        o.text = mathState.origText; o.sz = mathState.origSz; o.color = mathState.origColor; redraw();
+      } else if (!txt){
+        o.text = mathState.origText; pushUndo(snapshot()); removeWithDeps(o.id); ui.sel = null; commit();
+      } else {
+        const changed = txt !== mathState.origText || mathState.sz !== mathState.origSz || mathState.color !== mathState.origColor || mathState.wx !== o.x || mathState.wy !== o.y;
+        if (changed){
+          const nx = mathState.wx, ny = mathState.wy;
+          o.text = mathState.origText; o.sz = mathState.origSz; o.color = mathState.origColor;
+          pushUndo(snapshot());
+          o.text = txt; o.sz = mathState.sz; o.color = mathState.color; o.x = nx; o.y = ny;
+          commit();
+        } else redraw();
+      }
+    }
+    mathState.oid = null; return;
+  }
+  if (commitChanges && txt){
+    pushUndo(snapshot());
+    const o = addObj({type:'text', x: mathState.wx, y: mathState.wy, text: txt, sz: mathState.sz, color: mathState.color || ui.penColor || 'ink'});
+    ui.sel = o.id; commit();
+  } else redraw();
+}
+
+(() => {
+  const dragBtn = $('#mathDrag'); if (!dragBtn) return;
+  let dAct = null;
+  dragBtn.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    try { dragBtn.setPointerCapture(e.pointerId); } catch (_) {}
+    dAct = {id: e.pointerId, sx: e.clientX, sy: e.clientY, wx0: mathState.wx, wy0: mathState.wy};
+  });
+  dragBtn.addEventListener('pointermove', (e) => {
+    if (!dAct || e.pointerId !== dAct.id) return;
+    mathState.wx = r4(dAct.wx0 + (e.clientX - dAct.sx) / view.k);
+    mathState.wy = r4(dAct.wy0 - (e.clientY - dAct.sy) / view.k);
+    syncMathPos();
+  });
+  const endD = (e) => { if (dAct && e.pointerId === dAct.id){ dAct = null; $('#mathIn').focus(); } };
+  dragBtn.addEventListener('pointerup', endD);
+  dragBtn.addEventListener('pointercancel', endD);
+})();
+
+/* ----- Xử lý nhập trong ô gõ (bộ gõ Tiếng Việt trên MacBook, Windows (UniKey/EVKey) và bàn phím ảo Android) -----
+   Không sửa chữ khi bộ gõ đang soạn (chữ gạch chân): đợi bộ gõ chốt xong rồi mới biến đổi,
+   nên không phải blur/focus giữa chừng (việc đó làm kẹt bộ gõ và làm bàn phím ảo tắt rồi bật lại). */
+const NL = String.fromCharCode(10);
+function setMathVal(v, c){
+  const ta = $('#mathIn');
+  ta.value = v;
+  ta.setSelectionRange(c, c);
+  mathState.selfV = v;   /* chuỗi do app vừa đặt: sự kiện đến muộn mang đúng chuỗi này thì bỏ qua, không biến đổi lần hai */
+}
+
+/* Nhảy sang ô tiếp theo: từ tử sang mẫu, hoặc ra khỏi dấu } gần nhất */
+function jumpNextSlot(){
+  const ta = $('#mathIn'), pos = ta.selectionEnd || 0, after = ta.value.slice(pos);
+  let np = ta.value.length;
+  if (after.startsWith('}{')) np = pos + 2;
+  else { const i = after.indexOf('}'); if (i >= 0) np = pos + i + 1; }
+  ta.setSelectionRange(np, np); resetBlink(); updateMathPreview();
+}
+
+/* ch là ký tự vừa gõ, nằm ở vị trí pos - 1. Trả về {v, c} (chuỗi mới, vị trí con trỏ) nếu có biến đổi */
+function autoMath(ch, val, pos){
+  const before = val.slice(0, pos - 1), after = val.slice(pos);
+  if (ch === ' '){
+    /* Cho phép cả trường hợp vừa có 1 dấu cách thừa do bộ gõ IME đẩy vào trước đó */
+    const bTrim = before.endsWith(' ') ? before.slice(0, -1) : before;
+    /* (x+1)/(x-1) + Space  →  \frac{x+1}{x-1} */
+    const fp = bTrim.match(/\(([^()]+)\)\/\(([^()]+)\)$/);
+    if (fp){
+      const r = BS + 'frac{' + fp[1] + '}{' + fp[2] + '}', st = bTrim.length - fp[0].length;
+      return {v: bTrim.slice(0, st) + r + ' ' + after, c: st + r.length + 1};
+    }
+    /* a/b + Space  →  \frac{a}{b} (hỗ trợ cả chữ, số, mũ đơn giản, Δ, π) */
+    const fs = bTrim.match(/(?:^|[\s=+\-,(;{])([a-zA-Z0-9Δπ]+)\/([a-zA-Z0-9Δπ]+)$/);
+    if (fs){
+      const r = BS + 'frac{' + fs[1] + '}{' + fs[2] + '}', st = bTrim.length - fs[1].length - 1 - fs[2].length;
+      return {v: bTrim.slice(0, st) + r + ' ' + after, c: st + r.length + 1};
+    }
+    /* Từ gõ tắt: \tên (luôn được) hoặc tên đứng riêng (trừ các từ trùng chữ thường) */
+    const ws = bTrim.match(/\\([a-zA-Z]+)$/), wp = ws ? null : bTrim.match(/(?:^|[\s=+\-,(;{}0-9])([a-zA-Z]+)$/);
+    const w = ws ? ws[1] : wp ? wp[1] : '', slash = ws ? 1 : 0;
+    if (w && (AUTO_WORDS[w] || (slash && MATH_SYMS[w])) && (slash || !NEED_SLASH.has(w))){
+      const tpl = AUTO_WORDS[w] || MATH_SYMS[w], st = bTrim.length - w.length - slash, k = tpl.indexOf('|');
+      if (k >= 0) return {v: bTrim.slice(0, st) + tpl.slice(0, k) + tpl.slice(k + 1) + after, c: st + k};
+      return {v: bTrim.slice(0, st) + tpl + ' ' + after, c: st + tpl.length + 1};
+    }
+    /* Space ở cuối mũ / chỉ số: thoát ra ngoài */
+    if (/[\^_]\{[^{}]*$/.test(before) && after.startsWith('}')) return {v: before + after, c: before.length + 1};
+    return null;
+  }
+  if (ch === '/'){
+    /* (x+1)/  →  \frac{x+1}{|} */
+    const pm = before.match(/\(([^()]+)\)$/);
+    if (pm){ const st = before.length - pm[0].length, r = BS + 'frac{' + pm[1] + '}{'; return {v: before.slice(0, st) + r + '}' + after, c: st + r.length}; }
+    return null;
+  }
+  /* Đang ở cuối mũ / chỉ số (ngay trước dấu }): gõ dấu phép toán thì thoát ra ngoài (x^2+1 → x²+1);
+     mũ dài thì gõ trong ngoặc tròn: x^(n+1) → x^{n+1} */
+  if ('+-=,<>)'.includes(ch) && after.startsWith('}')){
+    const sm = before.match(/[\^_]\{([^{}]*)$/);
+    if (sm){
+      const body = sm[1], head = before.slice(0, before.length - body.length);
+      if (ch === ')'){
+        const full = body + ')';
+        let d = 0, ok = full[0] === '(';
+        for (let i = 0; ok && i < full.length; i++){ if (full[i] === '(') d++; else if (full[i] === ')'){ d--; if (d === 0 && i < full.length - 1) ok = false; } }
+        if (ok && d === 0){ const inner = full.slice(1, -1); return {v: head + inner + '}' + after.slice(1), c: head.length + inner.length + 1}; }
+        return null;
+      }
+      let d = 0; for (const c of body){ if (c === '(') d++; else if (c === ')') d--; }
+      if (body && d === 0) return {v: before + '}' + ch + after.slice(1), c: before.length + 2};
+    }
+    return null;
+  }
+  /* ^ và _ tự mở ngoặc: x^{|} */
+  if (ch === '^' || ch === '_') return after.startsWith('{') ? null : {v: before + ch + '{}' + after, c: pos + 1};
+  /* { tự đóng, } gõ trùng dấu đóng có sẵn thì chỉ nhảy qua */
+  if (ch === '{') return {v: before + '{}' + after, c: pos};
+  if (ch === '}') return after.startsWith('}') ? {v: before + after, c: pos} : null;
+  /* Enter trong \he{…} / \hoac{…}: thêm dòng của hệ; Enter ở dòng trống thì thoát ra khỏi hệ */
+  if (ch === NL && !mathState.shiftEnter && /\\(?:he|hoac|cases)\{[^{}]*$/.test(before)){
+    if (/;\s*$/.test(before)){
+      const cl = before.replace(/;\s*$/, ''), ci = after.indexOf('}');
+      if (ci >= 0){ const inner = after.slice(0, ci), rest = /^[\s;]*$/.test(inner) ? '' : inner; return {v: cl + rest + '}' + NL + after.slice(ci + 1), c: cl.length + rest.length + 2}; }
+    }
+    return {v: before + '; ' + after, c: before.length + 2};
+  }
+  return null;
+}
+
+(() => {
+  const ta = $('#mathIn');
+  let prevV = '', prevC = 0;
+  const TRIGGERS = ' /^_{}+-=,<>)' + NL;
+
+  /* Thử biến đổi tại vị trí con trỏ (ký tự vừa vào ô nằm ngay trước con trỏ) */
+  function tryAuto(){
+    const v = ta.value, pos = ta.selectionStart || 0;
+    if (v === mathState.selfV) return false;   /* sự kiện lặp sau khi app vừa tự biến đổi */
+    if (pos === 0 || pos !== (ta.selectionEnd || 0)) return false;
+    const ch = v[pos - 1];
+    if (!TRIGGERS.includes(ch)) return false;
+    const r = autoMath(ch, v, pos);
+    if (!r) return false;
+    setMathVal(r.v, r.c);
+    /* Xóa lùi ngay sau đó: với ^ _ { thì bỏ luôn ký tự vừa gõ; với Space, / và dấu phép toán thì trả lại chữ gốc */
+    if ('^_{'.includes(ch)) mathState.lastAuto = {v: r.v, c: r.c, raw: v.slice(0, pos - 1) + v.slice(pos), rawC: pos - 1};
+    else if (ch !== '}' && ch !== NL) mathState.lastAuto = {v: r.v, c: r.c, raw: v, rawC: pos};
+    return true;
+  }
+
+  ta.addEventListener('compositionstart', () => { mathState.composing = true; });
+  ta.addEventListener('compositionend', () => {
+    mathState.composing = false;
+    /* Bộ gõ MacBook / Android vừa chốt chữ (thường bằng dấu cách): kiểm tra lại sau khi mọi sự kiện của bộ gõ đã xong */
+    setTimeout(() => { if (mathState.open && !mathState.composing && tryAuto()) updateMathPreview(); }, 0);
+  });
+
+  ta.addEventListener('beforeinput', () => { prevV = ta.value; prevC = ta.selectionStart || 0; });
+
+  ta.addEventListener('input', (e) => {
+    resetBlink();
+    /* Đang soạn chữ: chỉ vẽ lại, chưa biến đổi */
+    if (e.isComposing || mathState.composing){ updateMathPreview(); return; }
+    const la = mathState.lastAuto; mathState.lastAuto = null;
+    const it = e.inputType || '';
+    /* Xóa lùi ngay sau một lần tự biến đổi: trả lại đúng chữ đã gõ (giống AutoCorrect của Word) */
+    if (la && it === 'deleteContentBackward' && prevV === la.v && prevC === la.c){
+      setMathVal(la.raw, la.rawC); updateMathPreview(); return;
+    }
+    if (!it.startsWith('delete') && !it.startsWith('history')) tryAuto();
+    updateMathPreview();
+  });
+
+  ta.addEventListener('keydown', (e) => {
+    resetBlink();
+    mathState.shiftEnter = e.key === 'Enter' && e.shiftKey;
+    if (e.key === 'Escape'){ e.preventDefault(); closeMathEditor(false); return; }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); closeMathEditor(true); return; }
+    if (e.key === 'Tab'){ e.preventDefault(); jumpNextSlot(); return; }
+    /* Phím Space trên bàn phím thật (khi không có phiên gõ đang mở): biến đổi ngay, phòng trường hợp bộ gõ nuốt sự kiện input */
+    if (e.key === ' ' && !e.isComposing && e.keyCode !== 229 && !mathState.composing && !e.ctrlKey && !e.metaKey && !e.altKey){
+      const pos = ta.selectionStart || 0;
+      if (pos === (ta.selectionEnd || 0)){
+        const tryV = ta.value.slice(0, pos) + ' ' + ta.value.slice(pos);
+        const r = autoMath(' ', tryV, pos + 1);
+        if (r){
+          e.preventDefault();
+          setMathVal(r.v, r.c);
+          mathState.lastAuto = {v: r.v, c: r.c, raw: tryV, rawC: pos + 1};
+          updateMathPreview();
+          return;
+        }
+      }
+    }
+    if (e.key === 'ArrowRight' && !e.shiftKey && ta.selectionStart === ta.selectionEnd && ta.value.slice(ta.selectionEnd).startsWith('}{')){
+      e.preventDefault(); const p = ta.selectionEnd + 2; ta.setSelectionRange(p, p); updateMathPreview(); return;
+    }
+    e.stopPropagation();
+  });
+  ta.addEventListener('click', () => { resetBlink(); updateMathPreview(); });
+  ta.addEventListener('keyup', () => updateMathPreview());
+})();
 
 /* ----- Bảng chọn ----- */
 const STYLE_NOTE = {ball:'Nét đều, gọn và rõ.', fountain:'Nhấn mạnh thì đậm, lướt nhanh thì thanh.', calli:'Nét kéo xuống đậm, nét đưa lên thanh, như viết bút mài.'};
@@ -2757,7 +3671,7 @@ for (const c of ['ink', 'red', 'blue', 'green']) $('#presentColors').appendChild
 $('#undo').addEventListener('click', doUndo);
 $('#redo').addEventListener('click', doRedo);
 addEventListener('keydown', (e) => {
-  if (e.target && e.target.tagName === 'INPUT') return;
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
   const k = e.key.toLowerCase(), m = e.ctrlKey || e.metaKey;
   if (m && k === 'z'){ e.preventDefault(); e.shiftKey ? doRedo() : doUndo(); }
   else if (m && k === 'y'){ e.preventDefault(); doRedo(); }
@@ -3036,7 +3950,7 @@ function toSVG(bb, opt){
     if (o.coords) out.push('<text x="' + X(g.x) + '" y="' + r2v(Y(g.y) + 18) + '" text-anchor="middle" dominant-baseline="middle" ' + fnt + ' font-size="13" fill="' + C(o) + '">(' + fmtNum(g.x) + '; ' + fmtNum(g.y) + ')</text>');
   }
   if (!opt.only) for (const o of S.objs){
-    if (o.type === 'text' && vis(o)) out.push('<text x="' + X(o.x) + '" y="' + r2v(Y(o.y) + 18) + '" ' + fnt + ' font-size="18" font-weight="500" fill="' + C(o) + '">' + esc(o.text) + '</text>');
+    if (o.type === 'text' && vis(o)){ const lay = layoutMathBlock(o.text, o.sz || 20), sx = X(o.x), sy = Y(o.y); for (const ln of lay.lines) renderMathNodeSVG(ln, sx, sy + ln.yOff, C(o), out); }
     if (o.type === 'stroke'){
       const p = o.pts, ox = o.ox || 0, oy = o.oy || 0; let d = '';
       for (let i = 0; i < p.length; i += 3) d += (i ? ' L' : 'M') + X(p[i] + ox) + ' ' + Y(p[i + 1] + oy);
