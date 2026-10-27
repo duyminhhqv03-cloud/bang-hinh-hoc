@@ -45,6 +45,7 @@ body{
 #stage{position:absolute;inset:0}
 #stage canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
 #over{touch-action:none;cursor:crosshair}
+#ink{pointer-events:none;visibility:hidden}
 #stage.drop::after{content:"Thả ảnh hoặc PDF vào đây";position:absolute;inset:14px;border:3px dashed var(--accent);border-radius:18px;display:grid;place-items:center;font-size:20px;color:var(--accent);background:rgba(255,255,255,.6);pointer-events:none}
 .panel{position:absolute;background:var(--chrome);border:1px solid var(--edge);border-radius:14px;box-shadow:var(--shadow)}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer;touch-action:manipulation}
@@ -182,7 +183,21 @@ body.present #present{display:flex}
 
 #toast{position:absolute;left:50%;bottom:70px;transform:translateX(-50%);padding:8px 14px;border-radius:10px;background:var(--text);color:var(--chrome);font-size:14px;pointer-events:none;opacity:0;transition:opacity .2s;max-width:calc(100% - 40px);text-align:center;z-index:8}
 #toast.show{opacity:1}
-@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+/* Đồng hồ đếm ngược */
+#timer{top:66px;right:10px;width:296px;padding:10px 12px 12px;display:grid;gap:8px;z-index:5}
+#tmHead{display:flex;align-items:center;justify-content:space-between;gap:8px;cursor:move;touch-action:none;margin:-4px -4px 0;padding:4px 4px 2px}
+#tmHead b{font-weight:600;font-size:14px;color:var(--muted);padding-left:4px}
+#tmClose{width:40px;height:40px;border-radius:9px;display:grid;place-items:center;font-size:20px;line-height:1;color:var(--muted)}
+#tmClose:hover{background:var(--chrome-2);color:var(--text)}
+#tmDisp{font-size:48px;font-weight:600;font-variant-numeric:tabular-nums;text-align:center;line-height:1.1;padding:4px 0;letter-spacing:1px}
+#tmDisp.danger{color:var(--danger)}
+#tmPre{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+#tmPre .cb,#tmCtrl .cb{min-height:40px;padding:0 6px;font-size:13px}
+#tmCtrl{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#tmToggle{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;font-size:14px}
+@keyframes tmBlink{0%,100%{border-color:var(--danger);box-shadow:0 0 0 3px var(--danger),var(--shadow)}50%{border-color:var(--edge);box-shadow:var(--shadow)}}
+#timer.alarm{border-color:var(--danger);box-shadow:0 0 0 2px var(--danger),var(--shadow);animation:tmBlink .5s ease-in-out 6}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}#timer.alarm{animation:none}}
 @media (max-width:640px){ #help{font-size:13px} }
 </style>
 </head>
@@ -191,6 +206,7 @@ body.present #present{display:flex}
   <canvas id="img"></canvas>
   <canvas id="base"></canvas>
   <canvas id="over" aria-label="Trang vẽ"></canvas>
+  <canvas id="ink"></canvas>
 </div>
 
 <nav id="tb" class="panel" aria-label="Công cụ dựng hình"></nav>
@@ -225,6 +241,14 @@ body.present #present{display:flex}
   <button class="cb" id="stSnip">Cắt vùng đề bài</button>
   <button class="cb" id="stVal">Hiện số đo</button>
   <button class="cb" id="stLock">Khóa vị trí</button>
+  <button class="cb" id="stGrid" hidden>Ô đơn vị</button>
+  <button class="cb" id="stSolidLbl" hidden>Tên đỉnh</button>
+  <button class="cb" id="stSolidView" hidden>Góc nhìn chuẩn</button>
+  <button class="cb" id="stUnfold" hidden>Trải phẳng</button>
+  <button class="cb" id="stNet" hidden>Kiểu trải: 1/3</button>
+  <button class="cb" id="stCubeAdd" hidden>Thêm khối</button>
+  <button class="cb" id="stCubeSub" hidden>Bớt khối</button>
+  <button class="cb" id="stCubeSplit" hidden>Tách lớp</button>
   <button class="cb" id="stHide">Ẩn</button>
   <button class="cb" id="stDup">Nhân đôi</button>
   <button class="cb danger" id="stDel">Xóa</button>
@@ -246,6 +270,7 @@ body.present #present{display:flex}
     <div class="seg" id="aligns"><button data-v="off">Tắt</button><button data-v="light">Nhẹ</button><button data-v="strong">Mạnh</button></div>
   </div>
   <button class="mi" id="optScroll" role="menuitemcheckbox"><span class="box"></span>Tự cuộn trang khi viết sát mép dưới</button>
+  <button class="mi" id="optFast" role="menuitemcheckbox" hidden><span class="box"></span>Viết siêu nhạy (mực hiện thẳng ra màn hình)</button>
 </div>
 
 <div id="erPop" class="panel pop left" hidden>
@@ -269,6 +294,7 @@ body.present #present{display:flex}
   <button class="mi" id="mLib">Thư viện bài giảng…</button>
   <button class="mi" id="mNewDoc">Bài mới</button>
   <button class="mi" id="mPresent">Chế độ trình chiếu</button>
+  <button class="mi" id="mTimer">Đồng hồ đếm ngược</button>
   <div class="msep"></div>
   <button class="mi" id="mOpen">Mở bài đã lưu (file)…</button>
   <button class="mi" id="mSave">Lưu bài thành file</button>
@@ -287,6 +313,12 @@ body.present #present{display:flex}
   <button class="mi" id="mAuto" role="menuitemcheckbox"><span class="box"></span>Tự động đặt tên điểm (A, B, C…)</button>
   <button class="mi" id="mLabels" role="menuitemcheckbox"><span class="box"></span>Hiện tên điểm</button>
   <button class="mi" id="mPenOnly" role="menuitemcheckbox"><span class="box"></span>Chỉ vẽ bằng bút, ngón tay để cuộn trang</button>
+  <div class="msep"></div>
+  <div class="mrow" style="padding-bottom:0"><span>Dụng cụ</span></div>
+  <button class="mi" id="mRuler" role="menuitemcheckbox"><span class="box"></span>Thước kẻ</button>
+  <button class="mi" id="mProt" role="menuitemcheckbox"><span class="box"></span>Thước đo góc</button>
+  <button class="mi" id="mSq45" role="menuitemcheckbox"><span class="box"></span>Ê ke 45°</button>
+  <button class="mi" id="mSq60" role="menuitemcheckbox"><span class="box"></span>Ê ke 30°–60°</button>
   <div class="msep"></div>
   <button class="mi" id="mFit">Xem vừa toàn bộ hình</button>
   <button class="mi" id="mTrace">Xóa dấu vết</button>
@@ -345,6 +377,22 @@ body.present #present{display:flex}
     <div class="mrow"><span>Định dạng</span><div class="seg" id="expFmt"><button data-v="png">Ảnh PNG</button><button data-v="svg">SVG (nét vectơ)</button></div></div>
     <div class="mrow"><span>Màu nét</span><div class="seg" id="expColor"><button data-v="keep">Giữ màu</button><button data-v="mono">Đen trắng</button></div></div>
     <div><button class="cb" id="expNo">Hủy</button><button class="cb" id="expOk">Xuất ảnh</button></div>
+  </div>
+</div>
+
+<div id="timer" class="panel" role="region" aria-label="Đồng hồ đếm ngược" hidden>
+  <div id="tmHead"><b>Đồng hồ đếm ngược</b><button id="tmClose" aria-label="Đóng" title="Đóng">×</button></div>
+  <div id="tmDisp">5:00</div>
+  <div id="tmPre">
+    <button class="cb" data-m="1">1 phút</button>
+    <button class="cb" data-m="3">3 phút</button>
+    <button class="cb" data-m="5">5 phút</button>
+    <button class="cb" data-m="10">10 phút</button>
+    <button class="cb" id="tmCustom">Khác…</button>
+  </div>
+  <div id="tmCtrl">
+    <button class="cb" id="tmToggle">Bắt đầu</button>
+    <button class="cb" id="tmReset">Đặt lại</button>
   </div>
 </div>
 
@@ -690,6 +738,7 @@ function resolve(o){
     }
     case 'stroke': return {stroke: true};
     case 'image': return {image: true};
+    case 'solid': return {solid: true};
   }
   return null;
 }
@@ -756,7 +805,7 @@ function addSeg(a, b){
   for (const o of S.objs) if (o.type === 'segment' && ((o.a === a && o.b === b) || (o.a === b && o.b === a))) return o;
   return newCurve({type:'segment', a, b});
 }
-const snapshot = () => ({objs: S.objs.map(o => ({...o})), nextId: S.nextId, pages: S.pages});
+const snapshot = () => ({objs: S.objs.map(o => o.cells ? {...o, cells: o.cells.map(c => c.slice())} : {...o}), nextId: S.nextId, pages: S.pages});
 
 /* ---------- Dò chạm (tọa độ thế giới) ---------- */
 function hitPoint(w, tol){
@@ -1152,14 +1201,439 @@ function hitAngle(w){
   return null;
 }
 function hitPoly(w){ for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'poly' && shown(o)){ const g = G.get(o.id); if (g && inPolyG(w.x, w.y, g.poly)) return o; } } return null; }
+/* ================= Hình khối 3D (Hình lập phương & Hình hộp chữ nhật) ================= */
+const SOLID_LBL = ['A', 'B', 'C', 'D', "A'", "B'", "C'", "D'"];
+const SOLID_FACES = [
+  {v: [0, 1, 5, 4], n: [0, 0, 1], u: 'a', w: 'c'},
+  {v: [2, 3, 7, 6], n: [0, 0, -1], u: 'a', w: 'c'},
+  {v: [1, 2, 6, 5], n: [1, 0, 0], u: 'b', w: 'c'},
+  {v: [3, 0, 4, 7], n: [-1, 0, 0], u: 'b', w: 'c'},
+  {v: [4, 5, 6, 7], n: [0, 1, 0], u: 'a', w: 'b'},
+  {v: [3, 2, 1, 0], n: [0, -1, 0], u: 'a', w: 'b'}
+];
+const SOLID_EDGES = [
+  [0, 1, 0, 5], [1, 2, 2, 5], [2, 3, 1, 5], [3, 0, 3, 5],
+  [4, 5, 0, 4], [5, 6, 2, 4], [6, 7, 1, 4], [7, 4, 3, 4],
+  [0, 4, 0, 3], [1, 5, 0, 2], [2, 6, 1, 2], [3, 7, 1, 3]
+];
+const SOLID_NET_C = ['blue', 'orange', 'green', 'pink', 'purple', 'teal'];
+const CUBE_NETS = [
+  /* Kiểu 1: Chữ thập (1-4-1) */
+  [[0, '', 'a', 'b', 0], [0, 'S', 'a', 'c', 1], [0, 'N', 'a', 'c', 2], [0, 'E', 'c', 'b', 3], [0, 'W', 'c', 'b', 4], [2, 'N', 'a', 'b', 5]],
+  /* Kiểu 2: 1-4-1 lệch */
+  [[0, '', 'a', 'b', 0], [0, 'S', 'a', 'c', 1], [0, 'N', 'a', 'c', 2], [2, 'E', 'c', 'b', 3], [1, 'W', 'c', 'b', 4], [2, 'N', 'a', 'b', 5]],
+  /* Kiểu 3: 2-3-1 */
+  [[0, '', 'a', 'b', 0], [0, 'W', 'c', 'b', 4], [0, 'N', 'a', 'c', 2], [0, 'E', 'c', 'b', 3], [1, 'S', 'c', 'a', 1], [4, 'W', 'b', 'a', 5]]
+];
+const CUBE_NB = [[0, 1, 0], [0, -1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]];
+function projectSolidEx(o){
+  const yaw = o.yaw !== undefined ? o.yaw : -0.6, pitch = o.pitch !== undefined ? o.pitch : 0.42;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const rot = (x, y, z) => {
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    return {x: o.x + x1, y: o.y + y * cp - z1 * sp, z: y * sp + z1 * cp};
+  };
+  const nz = SOLID_FACES.map(f => { const [nx, ny, nz0] = f.n, z1 = -nx * sy + nz0 * cy; return ny * sp + z1 * cp; });
+  const vis = nz.map((z, i) => z > 1e-6 || (Math.abs(z) <= 1e-6 && (i === 0 || i === 2 || i === 4)));
+  if (o.kind === 'cubes'){
+    const cells = (o.cells && o.cells.length) ? o.cells : [[0, 0, 0]];
+    const ks = [...new Set(cells.map(c => c[2]))].sort((a, b) => a - b);
+    const split = o.split || 0, kMid = (ks.length - 1) / 2;
+    const set = new Set(cells.map(c => c[0] + ',' + c[1] + ',' + c[2]));
+    const items = cells.map(c => {
+      const [i, j, k] = c, li = ks.indexOf(k);
+      const cx = i - 1, cz = j - 0.5, cy0 = (k - 0.5) + (li - kMid) * 0.6 * split;
+      return {c, li, cx, cy: cy0, cz, z: rot(cx, cy0, cz).z};
+    }).sort((a, b) => a.z - b.z);
+    const faces = [], pts = [], lMap = ks.map(() => ({n: 0, x: -Infinity, y: 0}));
+    for (const it of items){
+      lMap[it.li].n++;
+      const {cx, cy: cy0, cz, c} = it;
+      const v8 = [
+        [-0.5, -0.5, 0.5], [0.5, -0.5, 0.5], [0.5, -0.5, -0.5], [-0.5, -0.5, -0.5],
+        [-0.5, 0.5, 0.5], [0.5, 0.5, 0.5], [0.5, 0.5, -0.5], [-0.5, 0.5, -0.5]
+      ].map(d => rot(cx + d[0], cy0 + d[1], cz + d[2]));
+      for (const p of v8){ if (p.x > lMap[it.li].x){ lMap[it.li].x = p.x; lMap[it.li].y = p.y; } }
+      for (let fi = 0; fi < 6; fi++){
+        if (!vis[fi]) continue;
+        const [di, dj, dk] = CUBE_NB[fi], nb = [c[0] + di, c[1] + dj, c[2] + dk];
+        if ((dk === 0 || split <= 0.01) && set.has(nb[0] + ',' + nb[1] + ',' + nb[2])) continue;
+        const fpts = SOLID_FACES[fi].v.map(vi => v8[vi]);
+        faces.push({pts: fpts, fi, cell: c, nb, nz: nz[fi]});
+        for (const p of fpts) pts.push(p);
+      }
+    }
+    let minY = Infinity; for (const p of pts) if (p.y < minY) minY = p.y;
+    if (!isFinite(minY)) minY = o.y;
+    return {pts, nz, vis, minY, faces, layers: lMap};
+  }
+  /* Trải phẳng hình hộp / hình lập phương */
+  const isCube = o.a === o.b && o.b === o.c, net = CUBE_NETS[isCube ? (o.net || 0) % 3 : 0];
+  const al = (1 - clamp(o.unfold || 0, 0, 1)) * (Math.PI / 2), ca = Math.cos(al), sa = Math.sin(al);
+  const vadd = (a, b, s = 1) => [a[0] + b[0] * s, a[1] + b[1] * s, a[2] + b[2] * s];
+  const frames = [], faces = [], pts = [];
+  for (let i = 0; i < 6; i++){
+    const [pi, dir, uk, vk, ci] = net[i], du = o[uk] || 3, dv = o[vk] || 3;
+    if (i === 0){
+      frames.push({C: [0, -(o.c || 3) / 2, 0], U: [1, 0, 0], V: [0, 0, -1], N: [0, 1, 0], du, dv, ci});
+    } else {
+      const P = frames[pi]; let H, U = P.U, V = P.V, N = P.N, C;
+      if (dir === 'N'){
+        H = vadd(P.C, P.V, P.dv / 2);
+        V = vadd(vadd([0, 0, 0], P.V, ca), P.N, sa);
+        N = vadd(vadd([0, 0, 0], P.V, -sa), P.N, ca);
+        C = vadd(H, V, dv / 2);
+      } else if (dir === 'S'){
+        H = vadd(P.C, P.V, -P.dv / 2);
+        V = vadd(vadd([0, 0, 0], P.V, ca), P.N, -sa);
+        N = vadd(vadd([0, 0, 0], P.V, sa), P.N, ca);
+        C = vadd(H, V, -dv / 2);
+      } else if (dir === 'E'){
+        H = vadd(P.C, P.U, P.du / 2);
+        U = vadd(vadd([0, 0, 0], P.U, ca), P.N, sa);
+        N = vadd(vadd([0, 0, 0], P.U, -sa), P.N, ca);
+        C = vadd(H, U, du / 2);
+      } else {
+        H = vadd(P.C, P.U, -P.du / 2);
+        U = vadd(vadd([0, 0, 0], P.U, ca), P.N, -sa);
+        N = vadd(vadd([0, 0, 0], P.U, sa), P.N, ca);
+        C = vadd(H, U, -du / 2);
+      }
+      frames.push({C, U, V, N, du, dv, ci});
+    }
+    const F = frames[i], hu = F.du / 2, hv = F.dv / 2;
+    const raw4 = [[-hu, -hv], [hu, -hv], [hu, hv], [-hu, hv]].map(([u, v]) => {
+      const p = vadd(vadd(F.C, F.U, u), F.V, v);
+      return rot(p[0], p[1], p[2]);
+    });
+    const zAvg = (raw4[0].z + raw4[1].z + raw4[2].z + raw4[3].z) / 4;
+    faces.push({pts: raw4, du: F.du, dv: F.dv, fi: F.ci, z: zAvg});
+    for (const p of raw4) pts.push(p);
+  }
+  faces.sort((a, b) => a.z - b.z);
+  let minY = Infinity; for (const p of pts) if (p.y < minY) minY = p.y;
+  return {pts, nz, vis, minY, faces};
+}
+function projectSolid(o){
+  if (o.kind === 'cubes' || (o.unfold || 0) > 0) return projectSolidEx(o);
+  const hx = (o.a || 3) / 2, hy = (o.c || 3) / 2, hz = (o.b || 3) / 2;
+  const yaw = o.yaw !== undefined ? o.yaw : -0.6, pitch = o.pitch !== undefined ? o.pitch : 0.42;
+  const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+  const rot = (x, y, z) => {
+    const x1 = x * cy + z * sy, z1 = -x * sy + z * cy;
+    return {x: o.x + x1, y: o.y + y * cp - z1 * sp, z: y * sp + z1 * cp};
+  };
+  const raw = [
+    [-hx, -hy, hz], [hx, -hy, hz], [hx, -hy, -hz], [-hx, -hy, -hz],
+    [-hx, hy, hz], [hx, hy, hz], [hx, hy, -hz], [-hx, hy, -hz]
+  ];
+  const pts = raw.map(p => rot(p[0], p[1], p[2]));
+  const nz = SOLID_FACES.map(f => {
+    const [nx, ny, nz0] = f.n, z1 = -nx * sy + nz0 * cy;
+    return ny * sp + z1 * cp;
+  });
+  const vis = nz.map((z, i) => z > 1e-6 || (Math.abs(z) <= 1e-6 && (i === 0 || i === 2 || i === 4)));
+  let minY = Infinity; for (const p of pts) if (p.y < minY) minY = p.y;
+  return {pts, nz, vis, minY};
+}
+function solidBounds(o, pr){
+  const p = (pr || projectSolid(o)).pts;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const v of p){ if (v.x < x0) x0 = v.x; if (v.y < y0) y0 = v.y; if (v.x > x1) x1 = v.x; if (v.y > y1) y1 = v.y; }
+  return [x0, y0, x1, y1];
+}
+function solidHandlePos(o, vw, pr){
+  const p = pr || projectSolid(o);
+  return {x: vw.x + o.x * vw.k, y: vw.y - p.minY * vw.k + 18};
+}
+function solidHandleHit(o, s, pr){
+  const h = solidHandlePos(o, view, pr);
+  return hyp(s.x - h.x, s.y - h.y) <= 16;
+}
+function inSolid(o, w, pr){
+  const p = pr || projectSolid(o);
+  if (p.faces) return p.faces.some(f => inPolyG(w.x, w.y, f.pts));
+  return SOLID_FACES.some((f, fi) => p.vis[fi] && inPolyG(w.x, w.y, f.v.map(i => p.pts[i])));
+}
+function hitCubeFace(o, w, pr){
+  const p = pr || projectSolid(o); if (!p.faces) return null;
+  for (let i = p.faces.length - 1; i >= 0; i--) if (inPolyG(w.x, w.y, p.faces[i].pts)) return p.faces[i];
+  return null;
+}
+function hitSolid(w){
+  const s = {x: view.x + w.x * view.k, y: view.y - w.y * view.k};
+  for (let i = S.objs.length - 1; i >= 0; i--){
+    const o = S.objs[i]; if (o.type !== 'solid' || !shown(o)) continue;
+    const pr = projectSolid(o);
+    if (solidHandleHit(o, s, pr) || inSolid(o, w, pr)) return o;
+  }
+  return null;
+}
+function parseBoxDims(str){
+  const s = String(str || '').trim(); if (!s) return null;
+  let parts;
+  if (s.includes(';')) parts = s.split(/\s*;\s*/);
+  else {
+    const ws = s.split(/\s+/);
+    parts = (ws.length === 3 && ws.every(t => !t.endsWith(','))) ? ws : s.split(/[\s,;]+/);
+  }
+  if (parts.length !== 3) return null;
+  const nums = parts.map(p => parseFloat(p.replace(',', '.')));
+  return nums.every(n => isFinite(n) && n > 0) ? nums.map(r4) : null;
+}
+function drawSolidEx(ctx, o, vw, c, P, opt, sel, pr){
+  const X = (x) => vw.x + x * vw.k, Y = (y) => vw.y - y * vw.k, al = ctx.globalAlpha;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  if (sel && pr.faces){
+    ctx.setLineDash([]); ctx.strokeStyle = MARK; ctx.lineWidth = 6; ctx.globalAlpha = al * 0.45;
+    ctx.beginPath();
+    for (const f of pr.faces){
+      f.pts.forEach((p, k) => k ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y)));
+      ctx.closePath();
+    }
+    ctx.stroke();
+  }
+  if (o.kind === 'cubes'){
+    const SHADE = [0.19, 0.19, 0.12, 0.12, 0.28, 0.09];
+    for (const f of pr.faces){
+      const sp = f.pts.map(p => ({x: X(p.x), y: Y(p.y)}));
+      ctx.beginPath(); sp.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
+      ctx.fillStyle = P.bg; ctx.globalAlpha = al; ctx.fill();
+      ctx.fillStyle = c; ctx.globalAlpha = al * (opt.mono ? 0.06 : SHADE[f.fi]); ctx.fill();
+      ctx.strokeStyle = c; ctx.setLineDash([]); ctx.lineWidth = 1.6; ctx.globalAlpha = al; ctx.stroke();
+    }
+    ctx.font = '600 14px "Be Vietnam Pro",system-ui,sans-serif'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = P.bg; ctx.fillStyle = opt.mono ? '#000000' : c;
+    if (pr.layers && (o.split || 0) > 0.05){
+      ctx.textAlign = 'left';
+      for (let li = 0; li < pr.layers.length; li++){
+        const L = pr.layers[li]; if (!L.n) continue;
+        const tx = X(L.x) + 12, ty = Y(L.y), txt = 'Lớp ' + (li + 1) + ': ' + L.n;
+        ctx.strokeText(txt, tx, ty); ctx.fillText(txt, tx, ty);
+      }
+    }
+    const nCubes = (o.cells && o.cells.length) ? o.cells.length : 1;
+    const bx = X(o.x), by = Y(pr.minY) + (opt.clean ? 18 : 36), totalTxt = 'Số khối: ' + nCubes;
+    ctx.textAlign = 'center'; ctx.strokeText(totalTxt, bx, by); ctx.fillText(totalTxt, bx, by);
+  } else {
+    for (const f of pr.faces){
+      const sp = f.pts.map(p => ({x: X(p.x), y: Y(p.y)}));
+      const fc = opt.mono ? '#000000' : col(SOLID_NET_C[f.fi % 6], opt.paper);
+      ctx.beginPath(); sp.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
+      ctx.fillStyle = P.bg; ctx.globalAlpha = al * 0.88; ctx.fill();
+      ctx.fillStyle = fc; ctx.globalAlpha = al * (opt.mono ? 0.06 : 0.22); ctx.fill();
+      if (o.grid){
+        const du = f.du || 1, dv = f.dv || 1, [p0, p1, p2, p3] = sp;
+        const su = du > 60 ? Math.ceil(du / 60) : 1, sv = dv > 60 ? Math.ceil(dv / 60) : 1;
+        ctx.beginPath();
+        for (let u = su; u < du - 1e-6; u += su){
+          const t = u / du;
+          ctx.moveTo(p0.x + (p1.x - p0.x) * t, p0.y + (p1.y - p0.y) * t);
+          ctx.lineTo(p3.x + (p2.x - p3.x) * t, p3.y + (p2.y - p3.y) * t);
+        }
+        for (let v = sv; v < dv - 1e-6; v += sv){
+          const t = v / dv;
+          ctx.moveTo(p0.x + (p3.x - p0.x) * t, p0.y + (p3.y - p0.y) * t);
+          ctx.lineTo(p1.x + (p2.x - p1.x) * t, p1.y + (p2.y - p1.y) * t);
+        }
+        ctx.strokeStyle = fc; ctx.setLineDash([]); ctx.lineWidth = 0.9; ctx.globalAlpha = al * 0.45; ctx.stroke();
+      }
+      ctx.beginPath(); sp.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)); ctx.closePath();
+      ctx.strokeStyle = c; ctx.setLineDash([]); ctx.lineWidth = 2; ctx.globalAlpha = al; ctx.stroke();
+    }
+  }
+  if (!opt.clean){
+    const h = solidHandlePos(o, vw, pr), topY = vw.y - pr.minY * vw.k;
+    ctx.strokeStyle = sel ? MARK : c; ctx.lineWidth = 1.4; ctx.setLineDash([2.5, 2.5]); ctx.globalAlpha = al * 0.65;
+    ctx.beginPath(); ctx.moveTo(h.x, topY + 2); ctx.lineTo(h.x, h.y - 6); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = al;
+    ctx.beginPath(); ctx.arc(h.x, h.y, sel ? 6.5 : 5.5, 0, TAU);
+    ctx.fillStyle = sel ? MARK : c; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = P.bg; ctx.stroke();
+  }
+}
+function drawSolid(ctx, o, vw, c, P, opt, sel){
+  const pr = projectSolid(o), X = (x) => vw.x + x * vw.k, Y = (y) => vw.y - y * vw.k;
+  if (o.kind === 'cubes' || (o.unfold || 0) > 0){ drawSolidEx(ctx, o, vw, c, P, opt, sel, pr); return; }
+  const sp = pr.pts.map(p => ({x: X(p.x), y: Y(p.y)})), al = ctx.globalAlpha;
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  /* Tô màu nhạt các mặt nhìn thấy */
+  for (let fi = 0; fi < 6; fi++){
+    if (!pr.vis[fi]) continue;
+    const fv = SOLID_FACES[fi].v;
+    ctx.beginPath(); fv.forEach((vi, k) => k ? ctx.lineTo(sp[vi].x, sp[vi].y) : ctx.moveTo(sp[vi].x, sp[vi].y)); ctx.closePath();
+    ctx.fillStyle = c; ctx.globalAlpha = al * (opt.mono ? 0.06 : (0.12 + 0.05 * clamp(pr.nz[fi], 0, 1))); ctx.fill();
+  }
+  /* Kẻ lưới ô đơn vị trên các mặt nếu bật grid */
+  if (o.grid){
+    const traceFaceGrid = (visOnly) => {
+      ctx.beginPath();
+      for (let fi = 0; fi < 6; fi++){
+        if (pr.vis[fi] !== visOnly) continue;
+        const f = SOLID_FACES[fi], [i0, i1, i2, i3] = f.v, du = o[f.u] || 1, dv = o[f.w] || 1;
+        const p0 = sp[i0], p1 = sp[i1], p2 = sp[i2], p3 = sp[i3];
+        const su = du > 60 ? Math.ceil(du / 60) : 1, sv = dv > 60 ? Math.ceil(dv / 60) : 1;
+        for (let u = su; u < du - 1e-6; u += su){
+          const t = u / du;
+          ctx.moveTo(p0.x + (p1.x - p0.x) * t, p0.y + (p1.y - p0.y) * t);
+          ctx.lineTo(p3.x + (p2.x - p3.x) * t, p3.y + (p2.y - p3.y) * t);
+        }
+        for (let v = sv; v < dv - 1e-6; v += sv){
+          const t = v / dv;
+          ctx.moveTo(p0.x + (p3.x - p0.x) * t, p0.y + (p3.y - p0.y) * t);
+          ctx.lineTo(p1.x + (p2.x - p1.x) * t, p1.y + (p2.y - p1.y) * t);
+        }
+      }
+      ctx.stroke();
+    };
+    ctx.strokeStyle = c;
+    ctx.setLineDash([3, 4]); ctx.lineWidth = 0.7; ctx.globalAlpha = al * 0.1; traceFaceGrid(false);
+    ctx.setLineDash([]); ctx.lineWidth = 0.9; ctx.globalAlpha = al * 0.36; traceFaceGrid(true);
+  }
+  /* Viền sáng khi đang được chọn */
+  if (sel){
+    ctx.setLineDash([]); ctx.strokeStyle = MARK; ctx.lineWidth = 6.5; ctx.globalAlpha = al * 0.45;
+    ctx.beginPath();
+    for (const [a, b, f1, f2] of SOLID_EDGES) if (pr.vis[f1] || pr.vis[f2]){ ctx.moveTo(sp[a].x, sp[a].y); ctx.lineTo(sp[b].x, sp[b].y); }
+    ctx.stroke();
+  }
+  /* Cạnh khuất: nét đứt mảnh hơn */
+  ctx.strokeStyle = c; ctx.setLineDash([5, 4]); ctx.lineWidth = 1.3; ctx.globalAlpha = al * 0.72;
+  ctx.beginPath();
+  for (const [a, b, f1, f2] of SOLID_EDGES) if (!pr.vis[f1] && !pr.vis[f2]){ ctx.moveTo(sp[a].x, sp[a].y); ctx.lineTo(sp[b].x, sp[b].y); }
+  ctx.stroke();
+  /* Cạnh nhìn thấy: nét liền */
+  ctx.setLineDash([]); ctx.lineWidth = 2.1; ctx.globalAlpha = al;
+  ctx.beginPath();
+  for (const [a, b, f1, f2] of SOLID_EDGES) if (pr.vis[f1] || pr.vis[f2]){ ctx.moveTo(sp[a].x, sp[a].y); ctx.lineTo(sp[b].x, sp[b].y); }
+  ctx.stroke();
+  /* Tên đỉnh ABCD - A'B'C'D' lệch ra ngoài từ tâm */
+  if (o.lbl !== false){
+    const cx = X(o.x), cy = Y(o.y);
+    ctx.font = LABEL_FONT; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 4; ctx.strokeStyle = P.bg; ctx.fillStyle = opt.mono ? '#000000' : P.ink;
+    for (let i = 0; i < 8; i++){
+      const dx = sp[i].x - cx, dy = sp[i].y - cy, d = hyp(dx, dy) || 1;
+      const lx = sp[i].x + (dx / d) * 15, ly = sp[i].y + (dy / d) * 15;
+      ctx.strokeText(SOLID_LBL[i], lx, ly); ctx.fillText(SOLID_LBL[i], lx, ly);
+    }
+  }
+  /* Chấm tròn tay nắm dưới đáy khối để kéo dời khối */
+  if (!opt.clean){
+    const h = solidHandlePos(o, vw, pr), topY = vw.y - pr.minY * vw.k;
+    ctx.strokeStyle = sel ? MARK : c; ctx.lineWidth = 1.4; ctx.setLineDash([2.5, 2.5]); ctx.globalAlpha = al * 0.65;
+    ctx.beginPath(); ctx.moveTo(h.x, topY + 2); ctx.lineTo(h.x, h.y - 6); ctx.stroke();
+    ctx.setLineDash([]); ctx.globalAlpha = al;
+    ctx.beginPath(); ctx.arc(h.x, h.y, sel ? 6.5 : 5.5, 0, TAU);
+    ctx.fillStyle = sel ? MARK : c; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = P.bg; ctx.stroke();
+  }
+}
+function glowSolid(ctx, o, vw, color, lw){
+  const pr = projectSolid(o), X = (x) => vw.x + x * vw.k, Y = (y) => vw.y - y * vw.k;
+  ctx.strokeStyle = color; ctx.lineWidth = lw; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.setLineDash([]);
+  ctx.beginPath();
+  if (pr.faces){
+    for (const f of pr.faces){ f.pts.forEach((p, k) => k ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y))); ctx.closePath(); }
+  } else {
+    for (const [a, b, f1, f2] of SOLID_EDGES) if (pr.vis[f1] || pr.vis[f2]){ ctx.moveTo(X(pr.pts[a].x), Y(pr.pts[a].y)); ctx.lineTo(X(pr.pts[b].x), Y(pr.pts[b].y)); }
+  }
+  ctx.stroke();
+}
+function solidToSVGEx(o, vw, c, P, mono, out, pr){
+  const r2 = (v) => Math.round(v * 100) / 100, X = (x) => vw.x + x * vw.k, Y = (y) => vw.y - y * vw.k;
+  if (o.kind === 'cubes'){
+    const SHADE = [0.19, 0.19, 0.12, 0.12, 0.28, 0.09];
+    for (const f of pr.faces){
+      const d = f.pts.map((p, k) => (k ? 'L' : 'M') + r2(X(p.x)) + ' ' + r2(Y(p.y))).join(' ') + ' Z';
+      out.push('<path d="' + d + '" fill="' + P.bg + '"/>');
+      out.push('<path d="' + d + '" fill="' + c + '" fill-opacity="' + (mono ? '0.06' : SHADE[f.fi]) + '" stroke="' + c + '" stroke-width="1.6" stroke-linejoin="round"/>');
+    }
+    if (pr.layers && (o.split || 0) > 0.05){
+      for (let li = 0; li < pr.layers.length; li++){
+        const L = pr.layers[li]; if (!L.n) continue;
+        out.push('<text x="' + r2(X(L.x) + 12) + '" y="' + r2(Y(L.y) + 5) + '" font-family="Be Vietnam Pro, sans-serif" font-weight="600" font-size="14" fill="' + c + '" stroke="' + P.bg + '" stroke-width="4" paint-order="stroke">Lớp ' + (li + 1) + ': ' + L.n + '</text>');
+      }
+    }
+    const nCubes = (o.cells && o.cells.length) ? o.cells.length : 1;
+    out.push('<text x="' + r2(X(o.x)) + '" y="' + r2(Y(pr.minY) + 22) + '" text-anchor="middle" font-family="Be Vietnam Pro, sans-serif" font-weight="600" font-size="14" fill="' + c + '" stroke="' + P.bg + '" stroke-width="4" paint-order="stroke">Số khối: ' + nCubes + '</text>');
+    return;
+  }
+  for (const f of pr.faces){
+    const sp = f.pts.map(p => ({x: X(p.x), y: Y(p.y)})), fc = mono ? '#000000' : col(SOLID_NET_C[f.fi % 6], ui.paper);
+    const d = sp.map((p, k) => (k ? 'L' : 'M') + r2(p.x) + ' ' + r2(p.y)).join(' ') + ' Z';
+    out.push('<path d="' + d + '" fill="' + fc + '" fill-opacity="' + (mono ? '0.06' : '0.22') + '"/>');
+    if (o.grid){
+      const du = f.du || 1, dv = f.dv || 1, [p0, p1, p2, p3] = sp, segs = [];
+      const su = du > 60 ? Math.ceil(du / 60) : 1, sv = dv > 60 ? Math.ceil(dv / 60) : 1;
+      for (let u = su; u < du - 1e-6; u += su){
+        const t = u / du;
+        segs.push('M' + r2(p0.x + (p1.x - p0.x) * t) + ' ' + r2(p0.y + (p1.y - p0.y) * t) + 'L' + r2(p3.x + (p2.x - p3.x) * t) + ' ' + r2(p3.y + (p2.y - p3.y) * t));
+      }
+      for (let v = sv; v < dv - 1e-6; v += sv){
+        const t = v / dv;
+        segs.push('M' + r2(p0.x + (p3.x - p0.x) * t) + ' ' + r2(p0.y + (p3.y - p0.y) * t) + 'L' + r2(p1.x + (p2.x - p1.x) * t) + ' ' + r2(p1.y + (p2.y - p1.y) * t));
+      }
+      if (segs.length) out.push('<path d="' + segs.join(' ') + '" fill="none" stroke="' + fc + '" stroke-width="0.9" stroke-opacity="0.45"/>');
+    }
+    out.push('<path d="' + d + '" fill="none" stroke="' + c + '" stroke-width="2" stroke-linejoin="round"/>');
+  }
+}
+function solidToSVG(o, vw, c, P, mono, out){
+  const pr = projectSolid(o), r2 = (v) => Math.round(v * 100) / 100;
+  if (pr.faces){ solidToSVGEx(o, vw, c, P, mono, out, pr); return; }
+  const sp = pr.pts.map(p => ({x: vw.x + p.x * vw.k, y: vw.y - p.y * vw.k}));
+  for (let fi = 0; fi < 6; fi++){
+    if (!pr.vis[fi]) continue;
+    const fv = SOLID_FACES[fi].v, d = fv.map((vi, k) => (k ? 'L' : 'M') + r2(sp[vi].x) + ' ' + r2(sp[vi].y)).join(' ') + ' Z';
+    out.push('<path d="' + d + '" fill="' + c + '" fill-opacity="' + (mono ? '0.06' : r2(0.12 + 0.05 * clamp(pr.nz[fi], 0, 1))) + '"/>');
+  }
+  if (o.grid){
+    for (const [visOnly, op, lw, da] of [[false, 0.1, 0.7, ' stroke-dasharray="3 4"'], [true, 0.36, 0.9, '']]){
+      const segs = [];
+      for (let fi = 0; fi < 6; fi++){
+        if (pr.vis[fi] !== visOnly) continue;
+        const f = SOLID_FACES[fi], [i0, i1, i2, i3] = f.v, du = o[f.u] || 1, dv = o[f.w] || 1;
+        const p0 = sp[i0], p1 = sp[i1], p2 = sp[i2], p3 = sp[i3];
+        const su = du > 60 ? Math.ceil(du / 60) : 1, sv = dv > 60 ? Math.ceil(dv / 60) : 1;
+        for (let u = su; u < du - 1e-6; u += su){
+          const t = u / du;
+          segs.push('M' + r2(p0.x + (p1.x - p0.x) * t) + ' ' + r2(p0.y + (p1.y - p0.y) * t) + 'L' + r2(p3.x + (p2.x - p3.x) * t) + ' ' + r2(p3.y + (p2.y - p3.y) * t));
+        }
+        for (let v = sv; v < dv - 1e-6; v += sv){
+          const t = v / dv;
+          segs.push('M' + r2(p0.x + (p3.x - p0.x) * t) + ' ' + r2(p0.y + (p3.y - p0.y) * t) + 'L' + r2(p1.x + (p2.x - p1.x) * t) + ' ' + r2(p1.y + (p2.y - p1.y) * t));
+        }
+      }
+      if (segs.length) out.push('<path d="' + segs.join(' ') + '" fill="none" stroke="' + c + '" stroke-width="' + lw + '" stroke-opacity="' + op + '"' + da + '/>');
+    }
+  }
+  const hid = [], vis = [];
+  for (const [a, b, f1, f2] of SOLID_EDGES){
+    const s = 'M' + r2(sp[a].x) + ' ' + r2(sp[a].y) + 'L' + r2(sp[b].x) + ' ' + r2(sp[b].y);
+    if (pr.vis[f1] || pr.vis[f2]) vis.push(s); else hid.push(s);
+  }
+  if (hid.length) out.push('<path d="' + hid.join(' ') + '" fill="none" stroke="' + c + '" stroke-width="1.3" stroke-opacity="0.72" stroke-dasharray="5 4" stroke-linecap="round"/>');
+  if (vis.length) out.push('<path d="' + vis.join(' ') + '" fill="none" stroke="' + c + '" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"/>');
+  if (o.lbl !== false){
+    const cx = vw.x + o.x * vw.k, cy = vw.y - o.y * vw.k, tc = mono ? '#000000' : P.ink;
+    for (let i = 0; i < 8; i++){
+      const dx = sp[i].x - cx, dy = sp[i].y - cy, d = hyp(dx, dy) || 1;
+      const lx = sp[i].x + (dx / d) * 15, ly = sp[i].y + (dy / d) * 15 + 6;
+      out.push('<text x="' + r2(lx) + '" y="' + r2(ly) + '" text-anchor="middle" font-family="Times New Roman, Times, serif" font-style="italic" font-weight="600" font-size="20" fill="' + tc + '" stroke="' + P.bg + '" stroke-width="4" paint-order="stroke">' + SOLID_LBL[i] + '</text>');
+    }
+  }
+}
+
 function hitGeo(w, tol){ return hitPoint(w, tol) || hitAngle(w) || (curvesNear(w, tol)[0] || {}).o || null; }
-function hitGeoPoly(w, tol){ return hitGeo(w, tol) || hitPoly(w); }
+function hitGeoPoly(w, tol){ return hitGeo(w, tol) || hitPoly(w) || hitSolid(w); }
 function hitAny(w, tol){
   const g = hitGeo(w, tol); if (g) return g;
   for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'text' && shown(o) && inText(o, w)) return o; }
   for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'slider' && shown(o) && sliderHit(o, {x: view.x + w.x * view.k, y: view.y - w.y * view.k})) return o; }
   for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'numline' && shown(o) && inNumline(o, w)) return o; }
   for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'stroke' && strokeHit(o, w, tol)) return o; }
+  const so = hitSolid(w); if (so) return so;
   for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'poly' && shown(o)){ const g = G.get(o.id); if (g && inPolyG(w.x, w.y, g.poly)) return o; } }
   for (let i = S.objs.length - 1; i >= 0; i--){ const o = S.objs[i]; if (o.type === 'image' && inImage(o, w)) return o; }
   return null;
@@ -1435,6 +1909,36 @@ def('func', 'Đồ thị hàm số', 'Gõ biểu thức theo x, ví dụ: x^2 - 
   custom(){ TOOLS.func.onSelect(); } });
 def('numline', 'Tia số', 'Chạm vào chỗ đặt gốc 0 của tia số. Chọn rồi bấm Sửa để đổi số lớn nhất.', 'p M3 14h17M20 14l-3-2.5M20 14l-3 2.5;p M6 11v6M10 11v6M14 11v6', {
   custom(w){ pushUndo(snapshot()); const o = addObj({type:'numline', x: Math.round(w.x), y: Math.round(w.y), n: 10, color:'ink'}); commit(); pulse([o.id]); }});
+def('cube', 'Hình lập phương', 'Chạm vào chỗ đặt tâm khối, rồi nhập độ dài cạnh. Dùng công cụ Di chuyển kéo trong khối để xoay, kéo chấm tròn dưới đáy để dời.', 'p M12 3 20 7.5v9L12 21 4 16.5v-9z;p M4 7.5 12 12l8-4.5M12 12v9', {
+  custom(w){
+    askText('Độ dài cạnh hình lập phương', '3').then(t => {
+      if (t === null) return;
+      const a = parseFloat(String(t).trim().replace(',', '.'));
+      if (!(a > 0) || !isFinite(a)){ toast('Độ dài cạnh phải là số dương.'); return; }
+      pushUndo(snapshot()); const v = r4(a);
+      const o = addObj({type:'solid', x: r4(w.x), y: r4(w.y), a: v, b: v, c: v, yaw: -0.6, pitch: 0.42, unfold: 0, net: 0, color:'blue', grid: false, lbl: true});
+      select(o.id); commit(); pulse([o.id]);
+    });
+  }});
+def('box', 'Hình hộp chữ nhật', 'Chạm vào chỗ đặt tâm khối, rồi nhập dài, rộng, cao (ví dụ: 4, 3, 2). Dùng công cụ Di chuyển kéo trong khối để xoay, kéo chấm tròn dưới đáy để dời.', 'p M3 8.5 10 4.5 21 8.5v8L14 20.5 3 16.5z;p M3 8.5 14 12.5 21 8.5M14 12.5v8', {
+  custom(w){
+    askText('Kích thước: dài, rộng, cao', '4, 3, 2').then(t => {
+      if (t === null) return;
+      const dm = parseBoxDims(t);
+      if (!dm){ toast('Hãy nhập 3 số dương: dài, rộng, cao (ví dụ: 4, 3, 2).'); return; }
+      pushUndo(snapshot());
+      const o = addObj({type:'solid', x: r4(w.x), y: r4(w.y), a: dm[0], b: dm[1], c: dm[2], yaw: -0.6, pitch: 0.42, unfold: 0, color:'blue', grid: false, lbl: true});
+      select(o.id); commit(); pulse([o.id]);
+    });
+  }});
+def('cubes', 'Xếp hình lập phương nhỏ', 'Chạm vào chỗ đặt khối (mặc định 3×2×2). Dùng nút Thêm khối / Bớt khối trên thanh kiểu rồi chạm mặt khối để xếp thêm hoặc bớt; bấm Tách lớp để đếm từng lớp.', 'p M12 3 20 7.5v9L12 21 4 16.5v-9z;p M4 7.5 12 12l8-4.5M12 12v9;p M8 5.25 16 9.75v9M16 5.25 8 9.75v9M4 12l8 4.5 8-4.5', {
+  custom(w){
+    const cells = [];
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 2; j++) for (let k = 0; k < 2; k++) cells.push([i, j, k]);
+    pushUndo(snapshot());
+    const o = addObj({type:'solid', kind:'cubes', x: r4(w.x), y: r4(w.y), cells, yaw: -0.6, pitch: 0.42, split: 0, color:'blue'});
+    select(o.id); commit(); pulse([o.id]);
+  }});
 
 def('text', 'Gõ chữ & Công thức trực tiếp (T/fx)', 'Chạm vào đâu gõ ngay tại đó: a/b + Space ra phân số, sqrt + Space ra căn, he + Space ra hệ (Enter thêm dòng, Enter 2 lần thoát), x^2+1 ra x²+1, x^(n+1) ra mũ dài. Nút ⇥ (hoặc Tab) sang ô tiếp, Xóa lùi ngay sau khi tự đổi để trả lại chữ gốc. Chạm ra ngoài hoặc bấm Xong để hoàn tất.', 'p M4 6h10M9 6v12M6.5 18h5;p M15 11l4 7M19 11l-4 7', {
   custom(w, tol){
@@ -1466,9 +1970,10 @@ const GROUPS = [
   ['polygon', 'triRight', 'triIso', 'triEq', 'parallelogram', 'regular', 'rigid', 'polyline'],
   ['circle', 'circleR', 'circumcircle', 'incircle', 'tangentPts', 'tangent', 'compass', 'circle3', 'semicircle', 'arc', 'arc3', 'sector', 'sector3', 'polar'],
   ['angle', 'angleSize', 'distance', 'area'],
-  ['func', 'slider', 'numline', 'reflLine', 'reflPoint', 'rotateBy', 'translate', 'dilate', 'ellipse', 'hyperbola', 'parabola', 'conic5']
+  ['func', 'slider', 'numline', 'reflLine', 'reflPoint', 'rotateBy', 'translate', 'dilate', 'ellipse', 'hyperbola', 'parabola', 'conic5'],
+  ['cube', 'box', 'cubes']
 ];
-const GROUP_NAME = ['Di chuyển & Quản lý', 'Gõ Toán & Vẽ nhanh', 'Điểm & Giao điểm', 'Đường thẳng & Quan hệ', 'Tam giác & Đa giác', 'Đường tròn & Tiếp tuyến', 'Góc & Đo đạc', 'Hàm số, Biến hình & Conic'];
+const GROUP_NAME = ['Di chuyển & Quản lý', 'Gõ Toán & Vẽ nhanh', 'Điểm & Giao điểm', 'Đường thẳng & Quan hệ', 'Tam giác & Đa giác', 'Đường tròn & Tiếp tuyến', 'Góc & Đo đạc', 'Hàm số, Biến hình & Conic', 'Hình khối'];
 const PEN_TOOLS = ['pen', 'hl', 'eraser', 'text', 'lasso', 'laser'];
 const isGeoTool = (id) => !!(TOOLS[id].sig || TOOLS[id].chain || TOOLS[id].custom);
 
@@ -1541,6 +2046,22 @@ const ictx = img.getContext('2d');
 const bctx = base.getContext('2d');
 /* Không dùng {desynchronized: true} cho lớp phủ: trên Chrome Android (Galaxy Tab S7) lớp đó trở thành lớp riêng không trong suốt, che mất nền và hình bên dưới */
 const octx = over.getContext('2d');
+/* Mực nhanh: lớp vẽ thẳng ra màn hình (desynchronized: không chờ trình duyệt ghép các lớp, bớt 1-3 khung hình trễ),
+   chỉ hiện trong lúc đang viết. Lớp này đục (alpha:false, để tránh lỗi lớp trong suốt che nền trên Galaxy Tab S7),
+   nên lúc đặt bút chép cả trang đang thấy vào nó; nhấc bút thì ẩn đi, nét thật đã nằm ở lớp dưới */
+const ink = $('#ink');
+let fctx = null; try { fctx = ink.getContext('2d', {desynchronized: true, alpha: false}); } catch (_) {}
+const FAST_OK = !!(fctx && fctx.getContextAttributes && fctx.getContextAttributes().desynchronized);
+let fastInk = FAST_OK, inkOn = false;
+try { const v = localStorage.getItem('bhh-fastInk'); if (v !== null) fastInk = FAST_OK && v === '1'; } catch (_) {}
+function showInk(){
+  if (base.style.transform) drawBase();
+  fctx.setTransform(1, 0, 0, 1, 0, 0); fctx.fillStyle = getComputedStyle(document.body).backgroundColor || '#ffffff';
+  fctx.fillRect(0, 0, ink.width, ink.height);
+  fctx.drawImage(img, 0, 0); fctx.drawImage(base, 0, 0); fctx.drawImage(over, 0, 0);
+  ink.style.visibility = 'visible'; inkOn = true;
+}
+function hideInk(){ if (!inkOn) return; ink.style.visibility = 'hidden'; inkOn = false; }
 let W = 0, H = 0, DPR = 1;
 const COLORS = ['ink', 'red', 'blue', 'green', 'orange', 'purple', 'teal', 'pink'];
 const COLOR_NAME = {ink:'Đen', red:'Đỏ', blue:'Xanh dương', green:'Xanh lá', orange:'Cam', purple:'Tím', teal:'Xanh ngọc', pink:'Hồng'};
@@ -1781,6 +2302,12 @@ function drawScene(ctx, vw, w, h, opt){
     if (o.showArea){ let cx = 0, cy = 0; for (const p of g.poly){ cx += p.x; cy += p.y; } cx /= g.poly.length; cy /= g.poly.length; tag('S = ' + fmtNum(g.area), X(cx), Y(cy), c); }
     ctx.globalAlpha = 1;
   }
+  /* 1c. Hình khối 3D (hình lập phương, hình hộp chữ nhật) */
+  for (const o of S.objs){
+    if (o.type !== 'solid' || !ghost(o)) continue;
+    drawSolid(ctx, o, vw, C(o), P, opt, isSel(o.id));
+    ctx.globalAlpha = 1;
+  }
   /* 2. Đường, vạch đánh dấu đoạn bằng nhau */
   ctx.lineJoin = 'round';
   for (const o of S.objs){
@@ -1902,7 +2429,7 @@ function mselBounds(){
   for (const id of msel){
     const o = BY.get(id); if (!o) continue;
     if (o.type === 'stroke'){ const ox = o.ox || 0, oy = o.oy || 0; add(o.bb[0] + ox, o.bb[1] + oy, o.w); add(o.bb[2] + ox, o.bb[3] + oy, o.w); }
-    else { const g = G.get(id); if (isPt(g)) add(g.x, g.y, 8 / view.k); else if (isCi(g)) add(g.cx, g.cy, g.r); else if (o.type === 'text' || o.type === 'slider' || o.type === 'numline') add(o.x, o.y, 0); }
+    else { const g = G.get(id); if (isPt(g)) add(g.x, g.y, 8 / view.k); else if (isCi(g)) add(g.cx, g.cy, g.r); else if (o.type === 'text' || o.type === 'slider' || o.type === 'numline') add(o.x, o.y, 0); else if (o.type === 'solid'){ const b = solidBounds(o); add(b[0], b[1], 0); add(b[2], b[3], 0); } }
   }
   return x0 === Infinity ? null : [x0, y0, x1, y1];
 }
@@ -1972,18 +2499,20 @@ function glowObj(ctx, o, g, vw, color, lw){
   else if (isCurve(g)){ if (tracePath(ctx, o, g, vw, W, H)) ctx.stroke(); }
   else if (isAn(g)) drawAngle(ctx, {arcs: o.arcs}, g, vw, color, null, true);
   else if (o.type === 'slider' || o.type === 'numline'){ const sx = vw.x + o.x * vw.k, sy = vw.y - o.y * vw.k, L = o.type === 'slider' ? SL_W : (o.n + 0.6) * vw.k; ctx.beginPath(); ctx.moveTo(sx, sy); ctx.lineTo(sx + L, sy); ctx.stroke(); }
+  else if (o.type === 'solid') glowSolid(ctx, o, vw, color, lw);
   else if (isPo(g)){ ctx.beginPath(); g.poly.forEach((p, i) => i ? ctx.lineTo(vw.x + p.x * vw.k, vw.y - p.y * vw.k) : ctx.moveTo(vw.x + p.x * vw.k, vw.y - p.y * vw.k)); ctx.closePath(); ctx.stroke(); }
 }
 const ER_R = [9, 17, 30];   /* bán kính tẩy (px) */
 let erCur = null;
 function drawOverlay(){
+  if (inkOn && !(act && act.kind === 'stroke' && act.fast)) hideInk();
   octx.setTransform(DPR, 0, 0, DPR, 0, 0); octx.clearRect(0, 0, W, H);
   const X = (x) => view.x + x * view.k, Y = (y) => view.y - y * view.k;
   if (act && act.kind === 'stroke'){
     octx.save(); octx.setTransform(DPR * view.k, 0, 0, -DPR * view.k, DPR * view.x, DPR * view.y);
     if (act.hl) octx.globalAlpha = .32;
     const livePts = act.pred ? act.pts.concat(act.pred) : act.pts;
-    drawStroke(octx, {pts: livePts, w: act.w, vw: act.vw}, col(act.color, ui.paper), true); octx.restore();
+    drawStroke(octx, {pts: livePts, w: act.w, vw: act.vw, poly: !!act.edge}, col(act.color, ui.paper), true); octx.restore();
   }
   octx.setLineDash([]); octx.lineCap = 'round'; octx.lineJoin = 'round';
   const ring = (g, r) => { if (!isPt(g)) return; octx.beginPath(); octx.arc(X(g.x), Y(g.y), r || 10, 0, TAU); octx.stroke(); };
@@ -2017,7 +2546,7 @@ function drawOverlay(){
       if (T.chain && args.length){ const a = G.get(args[args.length - 1]); if (a){ octx.lineWidth = 2; octx.beginPath(); octx.moveTo(X(a.x), Y(a.y)); octx.lineTo(X(s.x), Y(s.y)); octx.stroke(); } }
     } else if (ui.tool === 'move' || ui.tool === 'del' || ui.tool === 'hide'){
       const o = ui.tool === 'hide' ? hitGeoPoly(hover, tol) : hitAny(hover, tol);
-      if (o && o.id !== ui.sel){ const g = G.get(o.id); if (isPt(g)) ring(g, 12); else if (isCurve(g)) glow(o, g); else if (isAn(g)) drawAngle(octx, {arcs: o.arcs}, g, view, MARK, null, true); else if (isPo(g) || o.type === 'slider' || o.type === 'numline'){ octx.globalAlpha = .5; glowObj(octx, o, g, view, MARK, 6); octx.globalAlpha = 1; } }
+      if (o && o.id !== ui.sel){ const g = G.get(o.id); if (isPt(g)) ring(g, 12); else if (isCurve(g)) glow(o, g); else if (isAn(g)) drawAngle(octx, {arcs: o.arcs}, g, view, MARK, null, true); else if (isPo(g) || o.type === 'slider' || o.type === 'numline' || o.type === 'solid'){ octx.globalAlpha = .5; glowObj(octx, o, g, view, MARK, 6); octx.globalAlpha = 1; } }
     }
   }
   const now0 = performance.now();
@@ -2061,6 +2590,8 @@ function drawOverlay(){
     }
     octx.globalAlpha = 1;
   }
+  drawInstruments(octx);
+  if (typeof syncSolidStyle === 'function'){ syncSolidStyle(); queueMicrotask(syncSolidStyle); }
 }
 let raf = 0;
 function redraw(){ if (!raf) raf = requestAnimationFrame(() => { raf = 0; drawBase(); drawOverlay(); }); }
@@ -2074,12 +2605,124 @@ function laserTick(){
 function resize(){
   const r = stage.getBoundingClientRect(); W = r.width; H = r.height;
   DPR = Math.min(window.devicePixelRatio || 1, 2.5);
-  for (const c of [img, base, over]){ c.width = Math.max(1, Math.round(W * DPR)); c.height = Math.max(1, Math.round(H * DPR)); }
+  hideInk();
+  for (const c of [img, base, over, ink]){ c.width = Math.max(1, Math.round(W * DPR)); c.height = Math.max(1, Math.round(H * DPR)); }
   imgDirty = true;
   if (!view.init && W > 0){ view.x = W / 2; view.y = H / 2; view.init = true; }
   drawBase(); drawOverlay();
   if (typeof syncMathPos === 'function') syncMathPos();
+  if (typeof clampTimer === 'function') clampTimer();
 }
+/* ================= Đồng hồ đếm ngược ================= */
+const timerEl = $('#timer'), tmDisp = $('#tmDisp'), tmToggle = $('#tmToggle'), tmHead = $('#tmHead');
+let tmTotal = 300000, tmRem = 300000, tmEnd = 0, tmInt = 0, tmAlarmT = 0, tmAudio = null, tmWake = null, tmDrag = null;
+async function reqWake(){ try { if (navigator.wakeLock && !tmWake) tmWake = await navigator.wakeLock.request('screen'); } catch (_) {} }
+function relWake(){ try { if (tmWake){ tmWake.release(); tmWake = null; } } catch (_) { tmWake = null; } }
+function clampTimer(){
+  if (!timerEl || timerEl.hidden || !timerEl.style.left) return;
+  const vw = W || window.innerWidth, vh = H || window.innerHeight, w = timerEl.offsetWidth || 296, h = timerEl.offsetHeight || 190;
+  const x = clamp(timerEl.offsetLeft, 6, Math.max(6, vw - w - 6)), y = clamp(timerEl.offsetTop, 6, Math.max(6, vh - h - 6));
+  timerEl.style.left = x + 'px'; timerEl.style.top = y + 'px'; timerEl.style.right = 'auto';
+}
+function loadTimerPos(){
+  try {
+    const p = JSON.parse(localStorage.getItem('bhh-timer-pos') || 'null');
+    if (p && isFinite(p.x) && isFinite(p.y)){ timerEl.style.left = p.x + 'px'; timerEl.style.top = p.y + 'px'; timerEl.style.right = 'auto'; }
+    else { timerEl.style.left = timerEl.style.top = timerEl.style.right = ''; }
+  } catch (_) {}
+  clampTimer();
+}
+function tmRender(){
+  const sec = Math.max(0, Math.ceil(tmRem / 1000));
+  tmDisp.textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  tmDisp.classList.toggle('danger', sec <= 10);
+  tmToggle.textContent = tmInt ? 'Tạm dừng' : 'Bắt đầu';
+}
+function tmStop(){
+  if (tmInt){ clearInterval(tmInt); tmInt = 0; }
+  relWake(); tmRender();
+}
+function tmBeep(){
+  try {
+    if (!tmAudio) tmAudio = new (window.AudioContext || window.webkitAudioContext)();
+    if (tmAudio.state === 'suspended') tmAudio.resume();
+    const t0 = tmAudio.currentTime;
+    for (let i = 0; i < 3; i++){
+      const o = tmAudio.createOscillator(), g = tmAudio.createGain();
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.25, t0 + i * 0.35);
+      g.gain.exponentialRampToValueAtTime(0.001, t0 + i * 0.35 + 0.25);
+      o.connect(g); g.connect(tmAudio.destination);
+      o.start(t0 + i * 0.35); o.stop(t0 + i * 0.35 + 0.25);
+    }
+  } catch (_) {}
+}
+function tmTick(){
+  tmRem = Math.max(0, tmEnd - Date.now());
+  if (tmRem <= 0){
+    tmRem = 0; tmStop(); tmBeep(); toast('Hết giờ!');
+    timerEl.classList.add('alarm'); clearTimeout(tmAlarmT);
+    tmAlarmT = setTimeout(() => timerEl.classList.remove('alarm'), 3000);
+    return;
+  }
+  tmRender();
+}
+function tmSet(ms){
+  clearTimeout(tmAlarmT); timerEl.classList.remove('alarm');
+  tmTotal = tmRem = ms; tmStop();
+}
+function parseTimerIn(s){
+  s = String(s || '').trim(); if (!s) return null;
+  const m = /^(\d+)\s*:\s*(\d{1,2})$/.exec(s);
+  if (m){ const sec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10); return sec > 0 ? sec * 1000 : null; }
+  const v = parseFloat(s.replace(',', '.'));
+  return (isFinite(v) && v > 0) ? Math.max(1, Math.round(v * 60)) * 1000 : null;
+}
+$('#mTimer').addEventListener('click', () => {
+  closePopups(); timerEl.hidden = false; loadTimerPos(); tmRender();
+});
+$('#tmClose').addEventListener('click', () => {
+  clearTimeout(tmAlarmT); timerEl.classList.remove('alarm'); tmStop(); timerEl.hidden = true;
+});
+$('#tmPre').addEventListener('click', (e) => {
+  const b = e.target.closest('button[data-m]'); if (b) tmSet(Number(b.dataset.m) * 60000);
+});
+$('#tmCustom').addEventListener('click', () => {
+  askText('Số phút (ví dụ: 5, 1.5 hoặc 2:30)', String(Math.round(tmTotal / 600) / 100)).then(t => {
+    if (t === null) return;
+    const ms = parseTimerIn(t);
+    if (!ms){ toast('Thời gian chưa hợp lệ. Hãy nhập số phút (như 1.5) hoặc phút:giây (như 1:30).'); return; }
+    tmSet(ms);
+  });
+});
+tmToggle.addEventListener('click', () => {
+  clearTimeout(tmAlarmT); timerEl.classList.remove('alarm');
+  if (tmInt){ tmRem = Math.max(0, tmEnd - Date.now()); tmStop(); return; }
+  try { if (!tmAudio) tmAudio = new (window.AudioContext || window.webkitAudioContext)(); if (tmAudio.state === 'suspended') tmAudio.resume(); } catch (_) {}
+  if (tmRem <= 0) tmRem = tmTotal;
+  tmEnd = Date.now() + tmRem;
+  tmInt = setInterval(tmTick, 200);
+  reqWake(); tmRender();
+});
+$('#tmReset').addEventListener('click', () => tmSet(tmTotal));
+tmHead.addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button')) return;
+  e.preventDefault();
+  try { tmHead.setPointerCapture(e.pointerId); } catch (_) {}
+  tmDrag = {id: e.pointerId, dx: e.clientX - timerEl.offsetLeft, dy: e.clientY - timerEl.offsetTop};
+});
+tmHead.addEventListener('pointermove', (e) => {
+  if (!tmDrag || e.pointerId !== tmDrag.id) return;
+  timerEl.style.left = (e.clientX - tmDrag.dx) + 'px'; timerEl.style.top = (e.clientY - tmDrag.dy) + 'px'; timerEl.style.right = 'auto';
+  clampTimer();
+});
+const tmEndDrag = (e) => {
+  if (!tmDrag || e.pointerId !== tmDrag.id) return;
+  tmDrag = null; clampTimer();
+  try { localStorage.setItem('bhh-timer-pos', JSON.stringify({x: Math.round(timerEl.offsetLeft), y: Math.round(timerEl.offsetTop)})); } catch (_) {}
+};
+tmHead.addEventListener('pointerup', tmEndDrag);
+tmHead.addEventListener('pointercancel', tmEndDrag);
 /* ================= Nắn nét vẽ tay thành hình ================= */
 function rdp(pts, eps){
   const keep = new Uint8Array(pts.length); keep[0] = keep[pts.length - 1] = 1;
@@ -2255,12 +2898,12 @@ function cancelAct(){
     const p = act.pre; S = p.S; args = p.args; taps = p.taps; toolSnap = p.toolSnap; toolDirty = p.toolDirty; undo.length = p.undoLen; compute(); updateAll();
   }
   if (act.kind === 'laser') act.L.end = performance.now();
-  act = null; hover = null; tapG = null;
+  act = null; hover = null; tapG = null; hideInk();
   if (base.style.transform) drawBase();
 }
 function dragPts(o){
   if (o.type === 'point') return o.def ? [] : [o];
-  if (o.type === 'angle' || o.type === 'text' || o.type === 'func' || o.type === 'slider' || o.type === 'numline') return [];
+  if (o.type === 'angle' || o.type === 'text' || o.type === 'func' || o.type === 'slider' || o.type === 'numline' || o.type === 'solid') return [];
   const out = new Set(); let ok = true;
   const walk = (x) => {
     if (x.type !== 'point'){ ok = false; return; }
@@ -2340,32 +2983,683 @@ function penFactor(a, ev, dx, dy, d, dt){
   const u = d > 0 ? dy / d : 0, dir = 0.58 + (u > 0 ? 0.85 * u : 0.22 * u);   /* kéo xuống: đậm, đưa lên: thanh */
   return dir * (hasP ? 0.62 + 0.65 * p : 1) * (1.08 - 0.22 * v);
 }
+/* ================= Tương tác Hình khối 3D & Thanh kiểu dáng ================= */
+let cubeMode = '';
+function syncSolidStyle(){
+  const bGrid = $('#stGrid'), bLbl = $('#stSolidLbl'), bView = $('#stSolidView');
+  const bUnfold = $('#stUnfold'), bNet = $('#stNet'), bAdd = $('#stCubeAdd'), bSub = $('#stCubeSub'), bSplit = $('#stCubeSplit');
+  if (!bGrid || !bLbl || !bView) return;
+  const o = (ui.sel != null && !msel.length) ? BY.get(ui.sel) : null;
+  if (!o || o.type !== 'solid'){
+    bGrid.hidden = bLbl.hidden = bView.hidden = bUnfold.hidden = bNet.hidden = bAdd.hidden = bSub.hidden = bSplit.hidden = true;
+    cubeMode = '';
+    return;
+  }
+  $('#style').hidden = false; $('#help').hidden = true;
+  $('#stColors').hidden = false; $('#stSep1').hidden = false;
+  $('#stColors').querySelectorAll('.sw').forEach(b => { const c = b.dataset.c || b.dataset.v; if (c) b.setAttribute('aria-pressed', String(c === o.color)); });
+  for (const id of ['#stWidths', '#stDash', '#stLabWrap', '#stShow', '#stLen', '#stCoord', '#stFill', '#stArea', '#stSize', '#stAnim', '#stTrace', '#stTicks', '#stArcs', '#stMk', '#stSnip', '#stVal', '#stLock']){ const el = $(id); if (el) el.hidden = true; }
+  $('#stEdit').hidden = false;
+  $('#stHide').hidden = false; $('#stHide').textContent = o.hidden ? 'Hiện' : 'Ẩn';
+  $('#stDup').hidden = false; $('#stDel').hidden = false;
+  const isCubes = o.kind === 'cubes', isCube = !isCubes && o.a === o.b && o.b === o.c;
+  if (!isCubes) cubeMode = '';
+  $('#stEdit').hidden = isCubes;
+  bGrid.hidden = isCubes; bGrid.setAttribute('aria-pressed', String(!!o.grid));
+  bLbl.hidden = isCubes; bLbl.setAttribute('aria-pressed', String(o.lbl !== false && !o.unfold));
+  bView.hidden = false;
+  bUnfold.hidden = isCubes;
+  const uf = (o.unfoldTarget !== undefined ? o.unfoldTarget : (o.unfold || 0)) > 0.5;
+  bUnfold.textContent = uf ? 'Gập lại' : 'Trải phẳng';
+  bUnfold.setAttribute('aria-pressed', String(uf));
+  bNet.hidden = !isCube;
+  bNet.textContent = 'Kiểu trải: ' + (((o.net || 0) % 3) + 1) + '/3';
+  bAdd.hidden = !isCubes; bAdd.setAttribute('aria-pressed', String(cubeMode === 'add'));
+  bSub.hidden = !isCubes; bSub.setAttribute('aria-pressed', String(cubeMode === 'sub'));
+  bSplit.hidden = !isCubes;
+  const sp = (o.splitTarget !== undefined ? o.splitTarget : (o.split || 0)) > 0.5;
+  bSplit.textContent = sp ? 'Gộp lớp' : 'Tách lớp';
+  bSplit.setAttribute('aria-pressed', String(sp));
+}
+function findSolidTarget(w, s, tol){
+  const selObj = ui.sel != null ? BY.get(ui.sel) : null;
+  if (selObj && selObj.type === 'solid' && shown(selObj) && solidHandleHit(selObj, s)) return {o: selObj, mode: 'move'};
+  if (hitGeo(w, tol)) return null;
+  for (let i = S.objs.length - 1; i >= 0; i--){
+    const o = S.objs[i]; if (!shown(o)) continue;
+    if ((o.type === 'text' && inText(o, w)) || (o.type === 'slider' && sliderHit(o, s)) || (o.type === 'numline' && inNumline(o, w)) || (o.type === 'stroke' && strokeHit(o, w, tol))) return null;
+  }
+  for (let i = S.objs.length - 1; i >= 0; i--){
+    const o = S.objs[i]; if (o.type !== 'solid' || !shown(o)) continue;
+    const pr = projectSolid(o);
+    if (solidHandleHit(o, s, pr)) return {o, mode: 'move'};
+    if (inSolid(o, w, pr)) return {o, mode: 'rot'};
+  }
+  return null;
+}
+queueMicrotask(() => {
+  $('#stGrid').addEventListener('click', () => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid') return;
+    pushUndo(snapshot()); o.grid = !o.grid; commit(); syncSolidStyle();
+  });
+  $('#stSolidLbl').addEventListener('click', () => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid') return;
+    pushUndo(snapshot()); o.lbl = o.lbl === false; commit(); syncSolidStyle();
+  });
+  $('#stSolidView').addEventListener('click', () => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid') return;
+    pushUndo(snapshot()); o.yaw = -0.6; o.pitch = 0.42; if (o.unfold) o.unfold = 0; delete o.unfoldTarget; commit(); syncSolidStyle();
+  });
+  $('#stUnfold').addEventListener('click', () => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid' || o.kind === 'cubes') return;
+    const cur = o.unfold || 0, target = (o.unfoldTarget !== undefined ? o.unfoldTarget : cur) > 0.5 ? 0 : 1;
+    pushUndo(snapshot());
+    if (target === 1 && cur < 0.05){ o.savedYaw = o.yaw !== undefined ? o.yaw : -0.6; o.savedPitch = o.pitch !== undefined ? o.pitch : 0.42; }
+    const u0 = cur, y0 = o.yaw !== undefined ? o.yaw : -0.6, p0 = o.pitch !== undefined ? o.pitch : 0.42;
+    const ty = target === 1 ? 0 : (o.savedYaw !== undefined ? o.savedYaw : -0.6);
+    const tp = target === 1 ? (Math.PI / 2 - 0.0001) : (o.savedPitch !== undefined ? o.savedPitch : 0.42);
+    const t0 = performance.now(), dur = 1200, token = (o.animTok = (o.animTok || 0) + 1);
+    o.unfoldTarget = target; syncSolidStyle();
+    const step = (now) => {
+      if (o.animTok !== token) return;
+      const p = clamp((now - t0) / dur, 0, 1), e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      o.unfold = r4(u0 + (target - u0) * e);
+      o.yaw = r4(y0 + (ty - y0) * e);
+      o.pitch = r4(p0 + (tp - p0) * e);
+      if (p < 1){ redraw(); requestAnimationFrame(step); }
+      else { o.unfold = target; o.yaw = r4(ty); o.pitch = r4(tp); delete o.unfoldTarget; commit(); syncSolidStyle(); }
+    };
+    requestAnimationFrame(step);
+  });
+  $('#stNet').addEventListener('click', () => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid' || o.kind === 'cubes') return;
+    pushUndo(snapshot()); o.net = ((o.net || 0) + 1) % 3; commit(); syncSolidStyle();
+  });
+  const setCubeEdit = (m) => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid' || o.kind !== 'cubes') return;
+    cubeMode = cubeMode === m ? '' : m;
+    syncSolidStyle();
+  };
+  $('#stCubeAdd').addEventListener('click', () => setCubeEdit('add'));
+  $('#stCubeSub').addEventListener('click', () => setCubeEdit('sub'));
+  $('#stCubeSplit').addEventListener('click', () => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid' || o.kind !== 'cubes') return;
+    const cur = o.split || 0, target = (o.splitTarget !== undefined ? o.splitTarget : cur) > 0.5 ? 0 : 1;
+    pushUndo(snapshot());
+    const s0 = cur, t0 = performance.now(), dur = 700, token = (o.splitTok = (o.splitTok || 0) + 1);
+    o.splitTarget = target; syncSolidStyle();
+    const step = (now) => {
+      if (o.splitTok !== token) return;
+      const p = clamp((now - t0) / dur, 0, 1), e = p < 0.5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2;
+      o.split = r4(s0 + (target - s0) * e);
+      if (p < 1){ redraw(); requestAnimationFrame(step); }
+      else { o.split = target; delete o.splitTarget; commit(); syncSolidStyle(); }
+    };
+    requestAnimationFrame(step);
+  });
+  $('#stEdit').addEventListener('click', (e) => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid') return;
+    e.stopImmediatePropagation();
+    const isCube = o.a === o.b && o.b === o.c;
+    askText(isCube ? 'Cạnh lập phương (hoặc dài, rộng, cao)' : 'Kích thước: dài, rộng, cao', isCube ? String(o.a) : (o.a + ', ' + o.b + ', ' + o.c)).then(t => {
+      if (t === null) return;
+      const dm = parseBoxDims(t);
+      if (dm){ pushUndo(snapshot()); [o.a, o.b, o.c] = dm; commit(); syncSolidStyle(); return; }
+      const v = parseFloat(String(t).trim().replace(',', '.'));
+      if (v > 0 && isFinite(v)){ pushUndo(snapshot()); o.a = o.b = o.c = r4(v); commit(); syncSolidStyle(); return; }
+      toast('Hãy nhập 1 số dương (lập phương) hoặc 3 số dương: dài, rộng, cao.');
+    });
+  }, true);
+  $('#stDup').addEventListener('click', (e) => {
+    const o = ui.sel != null ? BY.get(ui.sel) : null; if (!o || o.type !== 'solid') return;
+    e.stopImmediatePropagation();
+    pushUndo(snapshot());
+    const cp = addObj({...o, cells: o.cells ? o.cells.map(c => c.slice()) : undefined, x: r4(o.x + 0.8), y: r4(o.y - 0.8)});
+    select(cp.id); commit(); pulse([cp.id]); syncSolidStyle();
+  }, true);
+  /* Xử lý kéo xoay / kéo dời hình khối và khoanh chọn lasso */
+  let savedTool = null, sHit = null, lassoPts = null, mselPrev = null;
+  over.addEventListener('pointerdown', (e) => {
+    savedTool = null; sHit = null; mselPrev = null;
+    if (cropMode || asking || penBtn(e)) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    if (e.pointerType === 'touch' && ui.penOnly) return;
+    const s = pos(e), w = toWorld(s.x, s.y);
+    if (e.pointerType !== 'pen' && hitInstrument(w)) return;
+    if (msel.length && msel.some(id => (BY.get(id) || {}).type === 'solid')){
+      const mb = mselBounds();
+      if (mb && w.x >= mb[0] - 14 / view.k && w.x <= mb[2] + 18 / view.k && w.y >= mb[1] - 18 / view.k && w.y <= mb[3] + 14 / view.k){
+        mselPrev = {wx: w.x, wy: w.y, map: new Map()};
+        for (const id of msel){ const o = BY.get(id); if (o && o.type === 'solid') mselPrev.map.set(id, {x: o.x, y: o.y}); }
+        return;
+      }
+    }
+    const selO = ui.sel != null ? BY.get(ui.sel) : null;
+    if (cubeMode && selO && selO.type === 'solid' && selO.kind === 'cubes' && shown(selO) && !solidHandleHit(selO, s)){
+      const fc = hitCubeFace(selO, w);
+      if (fc){ sHit = {o: selO, mode: cubeMode, fc}; savedTool = ui.tool; ui.tool = 'pan'; return; }
+    }
+    if (ui.tool !== 'move' && ui.tool !== 'cubes') return;
+    const hit = findSolidTarget(w, s, tolFor(e) / view.k);
+    if (hit && (ui.tool === 'move' || hit.o.kind === 'cubes')){ sHit = hit; savedTool = ui.tool; ui.tool = 'pan'; }
+  }, true);
+  over.addEventListener('pointerdown', (e) => {
+    if (savedTool !== null){ ui.tool = savedTool; savedTool = null; }
+    if (!sHit) return;
+    if (e.pointerType === 'touch' && touches.size !== 1){ sHit = null; return; }
+    if (sHit.mode === 'add' || sHit.mode === 'sub'){
+      const {o, mode, fc} = sHit; sHit = null; act = null;
+      if (mode === 'add'){
+        const nb = fc.nb;
+        if (!o.cells.some(c => c[0] === nb[0] && c[1] === nb[1] && c[2] === nb[2])){
+          pushUndo(snapshot()); o.cells = o.cells.concat([[nb[0], nb[1], nb[2]]]); commit(); syncSolidStyle();
+        }
+      } else {
+        if (o.cells.length <= 1){ toast('Phải giữ ít nhất 1 khối lập phương.'); redraw(); return; }
+        const tc = fc.cell;
+        pushUndo(snapshot()); o.cells = o.cells.filter(c => !(c[0] === tc[0] && c[1] === tc[1] && c[2] === tc[2])); commit(); syncSolidStyle();
+      }
+      return;
+    }
+    const {o, mode} = sHit, s = pos(e); sHit = null;
+    msel = []; select(o.id); syncSolidStyle();
+    act = {kind:'solid', id: e.pointerId, ptype: e.pointerType, oid: o.id, mode, sx0: s.x, sy0: s.y, x0: o.x, y0: o.y, yaw0: o.yaw, pitch0: o.pitch, moved: false, snap: snapshot()};
+    redraw();
+  });
+  over.addEventListener('pointermove', (e) => {
+    if (mselPrev && act && act.kind !== 'pan' && act.kind !== 'pinch' && act.kind !== 'lasso'){
+      mselPrev.before = new Map();
+      for (const id of mselPrev.map.keys()){ const o = BY.get(id); if (o) mselPrev.before.set(id, {x: o.x, y: o.y}); }
+    }
+  }, true);
+  over.addEventListener('pointermove', (e) => {
+    const s = pos(e), w = toWorld(s.x, s.y);
+    if (mselPrev && mselPrev.before && act && act.kind !== 'pan' && act.kind !== 'pinch' && act.kind !== 'lasso'){
+      const dx = w.x - mselPrev.wx, dy = w.y - mselPrev.wy;
+      let changed = false;
+      for (const [id, b0] of mselPrev.before.entries()){
+        const o = BY.get(id); if (!o) continue;
+        if (o.x === b0.x && o.y === b0.y){ o.x = r4(b0.x + dx); o.y = r4(b0.y + dy); changed = true; }
+      }
+      mselPrev.wx = w.x; mselPrev.wy = w.y; mselPrev.before = null;
+      if (changed) redraw();
+      return;
+    }
+    if (!act || act.kind !== 'solid') return;
+    if (e.pointerType === 'touch' && touches.size >= 2){ act = null; return; }
+    if (e.pointerId !== act.id) return;
+    const o = BY.get(act.oid); if (!o) return;
+    const dx = s.x - act.sx0, dy = s.y - act.sy0;
+    if (!act.moved && hyp(dx, dy) > 3){ act.moved = true; pushUndo(act.snap); }
+    if (act.moved){
+      if (act.mode === 'move'){ o.x = r4(act.x0 + dx / view.k); o.y = r4(act.y0 - dy / view.k); }
+      else { o.yaw = r4(act.yaw0 + dx * 0.01); o.pitch = r4(clamp(act.pitch0 + dy * 0.01, -1.45, 1.45)); }
+      redraw();
+    }
+  });
+  const onUpCap = () => {
+    lassoPts = (act && act.kind === 'lasso' && act.pts && act.pts.length > 2) ? act.pts.slice() : null;
+  };
+  const onUpBub = (e) => {
+    mselPrev = null;
+    if (lassoPts){
+      const poly = lassoPts; lassoPts = null;
+      let added = false;
+      for (const o of S.objs){
+        if (o.type === 'solid' && shown(o) && !msel.includes(o.id) && inPolyG(o.x, o.y, poly)){ msel.push(o.id); added = true; }
+      }
+      if (added){ if (msel.length === 1){ select(msel[0]); msel = []; } else { redraw(); syncSolidStyle(); } }
+    }
+    if (!act || act.kind !== 'solid' || e.pointerId !== act.id) return;
+    const moved = act.moved; act = null;
+    if (moved) commit(); else { redraw(); syncSolidStyle(); }
+  };
+  over.addEventListener('pointerup', onUpCap, true);
+  over.addEventListener('pointercancel', onUpCap, true);
+  over.addEventListener('pointerup', onUpBub);
+  over.addEventListener('pointercancel', onUpBub);
+  /* Hỗ trợ xuất hình khối ra SVG bằng thẻ path và text */
+  const OrigBlob = window.Blob;
+  window.Blob = function(parts, opts){
+    if (Array.isArray(parts) && typeof parts[0] === 'string' && parts[0].includes('<svg') && parts[0].includes('</svg>') && ui.exp.fmt === 'svg'){
+      const vw = (cropMode && cropRect) ? {x: -cropRect[0] * view.k, y: cropRect[3] * view.k, k: view.k} : view;
+      const P = PAPER[ui.paper], mono = ui.exp.color === 'mono', extra = [];
+      for (const o of S.objs){
+        if (o.type !== 'solid' || o.hidden) continue;
+        solidToSVG(o, vw, mono ? '#000000' : col(o.color, ui.paper), P, mono, extra);
+      }
+      if (extra.length) parts = [parts[0].replace('</svg>', extra.join('') + '</svg>')];
+    }
+    return new OrigBlob(parts, opts);
+  };
+  window.Blob.prototype = OrigBlob.prototype;
+});
+/* ================= Bộ dụng cụ hình học (thước kẻ, đo góc, ê ke) ================= */
+const RULER_L = 15, RULER_W = 1.6, PROT_R = 5, SQ45_L = 8, SQ60_W = 5 * Math.sqrt(3), SQ60_H = 5;
+let instruments = [];
+try {
+  const raw = JSON.parse(localStorage.getItem('bhh-tools') || '[]');
+  if (Array.isArray(raw)) instruments = raw.filter(t => t && typeof t.kind === 'string' && isFinite(t.x) && isFinite(t.y) && isFinite(t.a));
+} catch (_) {}
+function saveInstruments(){
+  try { localStorage.setItem('bhh-tools', JSON.stringify(instruments.map(t => ({kind: t.kind, x: r4(t.x), y: r4(t.y), a: r4(t.a)})))); } catch (_) {}
+}
+function instPt(t, lx, ly){
+  const c = Math.cos(t.a), s = Math.sin(t.a);
+  return {x: t.x + lx * c - ly * s, y: t.y + lx * s + ly * c};
+}
+function instLocal(t, w){
+  const dx = w.x - t.x, dy = w.y - t.y, c = Math.cos(t.a), s = Math.sin(t.a);
+  return {x: dx * c + dy * s, y: -dx * s + dy * c};
+}
+function rulerKnobLocal(){ return {x: Math.max(RULER_L * 0.5, RULER_L - 22 / view.k), y: RULER_W * 0.6}; }
+function instKnobLocal(t){
+  if (t.kind === 'ruler') return rulerKnobLocal();
+  if (t.kind === 'protractor') return {x: PROT_R * 0.42, y: PROT_R * 0.28};
+  if (t.kind === 'sq45') return {x: SQ45_L * 0.38, y: SQ45_L * 0.12};
+  if (t.kind === 'sq60') return {x: SQ60_W * 0.38, y: SQ60_H * 0.12};
+  return null;
+}
+function hitInstKnob(t, s){
+  const kb = instKnobLocal(t); if (!kb) return false;
+  const p = instPt(t, kb.x, kb.y);
+  return hyp(s.x - (view.x + p.x * view.k), s.y - (view.y - p.y * view.k)) <= 16;
+}
+function edgesOf(t){
+  const seg = (x0, y0, x1, y1) => { const a = instPt(t, x0, y0), b = instPt(t, x1, y1); return {x0: a.x, y0: a.y, x1: b.x, y1: b.y}; };
+  if (t.kind === 'ruler') return [seg(0, 0, RULER_L, 0), seg(0, RULER_W, RULER_L, RULER_W), seg(0, 0, 0, RULER_W), seg(RULER_L, 0, RULER_L, RULER_W)];
+  if (t.kind === 'protractor') return [seg(-PROT_R, 0, PROT_R, 0)];
+  if (t.kind === 'sq45') return [seg(0, 0, SQ45_L, 0), seg(0, 0, 0, SQ45_L), seg(SQ45_L, 0, 0, SQ45_L)];
+  if (t.kind === 'sq60') return [seg(0, 0, SQ60_W, 0), seg(0, 0, 0, SQ60_H), seg(SQ60_W, 0, 0, SQ60_H)];
+  return [];
+}
+function hitInstrument(w){
+  const s = {x: view.x + w.x * view.k, y: view.y - w.y * view.k};
+  for (let i = instruments.length - 1; i >= 0; i--){
+    const t = instruments[i];
+    const p = instLocal(t, w);
+    if (hitInstKnob(t, s)) return t;
+    if (t.kind === 'ruler' && p.x >= 0 && p.x <= RULER_L && p.y >= 0 && p.y <= RULER_W) return t;
+    if (t.kind === 'protractor' && p.y >= 0 && p.x * p.x + p.y * p.y <= PROT_R * PROT_R) return t;
+    if (t.kind === 'sq45' && p.x >= 0 && p.y >= 0 && p.x + p.y <= SQ45_L) return t;
+    if (t.kind === 'sq60' && p.x >= 0 && p.y >= 0 && p.x / SQ60_W + p.y / SQ60_H <= 1) return t;
+  }
+  return null;
+}
+function snapInstAngle(a){
+  const step = Math.PI / 12, near = Math.round(a / step) * step;
+  return Math.abs(a - near) < Math.PI / 60 ? near : a;
+}
+function drawInstruments(ctx){
+  if (!instruments.length) return;
+  const isBoard = ui.paper === 'board', inkCol = PAPER[ui.paper].ink;
+  for (const t of instruments){
+    if (t.kind === 'ruler'){
+      ctx.save();
+      ctx.translate(view.x + t.x * view.k, view.y - t.y * view.k);
+      ctx.rotate(-t.a);
+      const L = RULER_L * view.k, B = RULER_W * view.k;
+      ctx.fillStyle = isBoard ? 'rgba(28,42,38,.58)' : 'rgba(232,244,248,.55)';
+      ctx.strokeStyle = isBoard ? '#8fa39b' : '#5a6963';
+      ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.rect(0, -B, L, B); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = isBoard ? 'rgba(255,255,255,.05)' : 'rgba(47,93,80,.06)';
+      ctx.fillRect(0, -Math.min(B, 18), L, Math.min(B, 18));
+      const hMaj = Math.min(14, B * 0.28), hMed = Math.min(9.5, B * 0.19), hMin = Math.min(5.5, B * 0.11);
+      const showMin = 0.1 * view.k >= 4, total = Math.round(RULER_L * 10);
+      ctx.strokeStyle = inkCol; ctx.fillStyle = inkCol; ctx.lineCap = 'butt';
+      ctx.beginPath();
+      for (let i = 0; i <= total; i++){
+        const isMaj = i % 10 === 0, isMed = i % 5 === 0;
+        if (!isMaj && !isMed && !showMin) continue;
+        const x = (i / 10) * view.k, h = isMaj ? hMaj : isMed ? hMed : hMin;
+        ctx.moveTo(x, 0); ctx.lineTo(x, -h);
+      }
+      ctx.lineWidth = 1.1; ctx.stroke();
+      if (B >= 22){
+        const fsz = clamp(Math.round(view.k * 0.24), 9, 13);
+        ctx.font = '500 ' + fsz + 'px "Be Vietnam Pro",system-ui,sans-serif';
+        ctx.textBaseline = 'bottom';
+        for (let u = 0; u <= RULER_L; u++){
+          const x = u * view.k, pad = u === 0 ? 3 : u === RULER_L ? -3 : 0;
+          ctx.textAlign = u === 0 ? 'left' : u === RULER_L ? 'right' : 'center';
+          ctx.fillText(String(u), x + pad, -hMaj - 2);
+        }
+      }
+      const kb = rulerKnobLocal(), kx = kb.x * view.k, ky = -kb.y * view.k;
+      ctx.beginPath(); ctx.arc(kx, ky, 14, 0, TAU);
+      ctx.fillStyle = isBoard ? 'rgba(51,66,61,.9)' : 'rgba(246,247,244,.92)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = isBoard ? '#86cbb4' : '#2f5d50'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(kx, ky, 6.5, -Math.PI * 0.75, Math.PI * 0.55); ctx.stroke();
+      const ax = kx + 6.5 * Math.cos(Math.PI * 0.55), ay = ky + 6.5 * Math.sin(Math.PI * 0.55);
+      ctx.beginPath(); ctx.moveTo(ax - 3.5, ay - 2.5); ctx.lineTo(ax, ay); ctx.lineTo(ax + 2.5, ay - 3.5); ctx.stroke();
+      if (act && act.kind === 'inst' && act.t === t && act.rot){
+        let deg = Math.round(t.a * 180 / Math.PI) % 360;
+        if (deg > 180) deg -= 360; else if (deg <= -180) deg += 360;
+        const txt = deg + '°', mx = L / 2, my = -B * 0.58;
+        ctx.font = '600 13px "Be Vietnam Pro",system-ui,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tw = ((ctx.measureText(txt) || {}).width || 28) + 14;
+        ctx.fillStyle = 'rgba(29,42,38,.86)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(mx - tw / 2, my - 11, tw, 22, 6) : ctx.rect(mx - tw / 2, my - 11, tw, 22); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+      }
+      ctx.restore();
+    } else if (t.kind === 'protractor'){
+      ctx.save();
+      ctx.translate(view.x + t.x * view.k, view.y - t.y * view.k);
+      ctx.rotate(-t.a);
+      const R = PROT_R * view.k;
+      ctx.fillStyle = isBoard ? 'rgba(28,42,38,.58)' : 'rgba(232,244,248,.55)';
+      ctx.strokeStyle = isBoard ? '#8fa39b' : '#5a6963';
+      ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI, true); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = isBoard ? 'rgba(255,255,255,.05)' : 'rgba(47,93,80,.06)';
+      ctx.fillRect(-R, -Math.min(R * 0.12, 14), R * 2, Math.min(R * 0.12, 14));
+      const hMaj = Math.min(15, R * 0.1), hMed = Math.min(10, R * 0.068), hMin = Math.min(5.5, R * 0.038);
+      const fsz = clamp(Math.round(view.k * 0.2), 8, 12);
+      const rOut = R - hMaj - fsz * 0.65, rIn = rOut - fsz * 1.25, rArc = Math.max(18, rIn - fsz * 0.75);
+      ctx.strokeStyle = inkCol; ctx.fillStyle = inkCol; ctx.lineWidth = 1; ctx.lineCap = 'butt';
+      ctx.beginPath();
+      if (rArc > 22) ctx.arc(0, 0, rArc, 0, Math.PI, true);
+      ctx.moveTo(-8, 0); ctx.lineTo(8, 0); ctx.moveTo(0, 5); ctx.lineTo(0, -Math.max(8, rArc));
+      ctx.stroke();
+      ctx.beginPath(); ctx.arc(0, 0, 2.2, 0, TAU); ctx.fill();
+      const showMin = R >= 90;
+      ctx.beginPath();
+      for (let d = 0; d <= 180; d++){
+        const isMaj = d % 10 === 0, isMed = d % 5 === 0;
+        if (!isMaj && !isMed && !showMin) continue;
+        const rad = d * Math.PI / 180, cs = Math.cos(rad), sn = Math.sin(rad), h = isMaj ? hMaj : isMed ? hMed : hMin;
+        ctx.moveTo(R * cs, -R * sn); ctx.lineTo((R - h) * cs, -(R - h) * sn);
+      }
+      ctx.lineWidth = 1.05; ctx.stroke();
+      if (R >= 70){
+        ctx.font = '500 ' + fsz + 'px "Be Vietnam Pro",system-ui,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        for (let d = 0; d <= 180; d += 10){
+          const rad = clamp(d * Math.PI / 180, 0.055, Math.PI - 0.055), cs = Math.cos(rad), sn = Math.sin(rad);
+          ctx.save(); ctx.translate(rOut * cs, -rOut * sn); ctx.rotate(Math.PI / 2 - rad); ctx.fillText(String(d), 0, 0); ctx.restore();
+          if (rIn > 28){ ctx.save(); ctx.translate(rIn * cs, -rIn * sn); ctx.rotate(Math.PI / 2 - rad); ctx.fillText(String(180 - d), 0, 0); ctx.restore(); }
+        }
+      }
+      const kb = instKnobLocal(t), kx = kb.x * view.k, ky = -kb.y * view.k;
+      ctx.beginPath(); ctx.arc(kx, ky, 14, 0, TAU);
+      ctx.fillStyle = isBoard ? 'rgba(51,66,61,.9)' : 'rgba(246,247,244,.92)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = isBoard ? '#86cbb4' : '#2f5d50'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(kx, ky, 6.5, -Math.PI * 0.75, Math.PI * 0.55); ctx.stroke();
+      const ax = kx + 6.5 * Math.cos(Math.PI * 0.55), ay = ky + 6.5 * Math.sin(Math.PI * 0.55);
+      ctx.beginPath(); ctx.moveTo(ax - 3.5, ay - 2.5); ctx.lineTo(ax, ay); ctx.lineTo(ax + 2.5, ay - 3.5); ctx.stroke();
+      if (act && act.kind === 'inst' && act.t === t && act.mode === 'ray'){
+        const ang = act.ray, cs = Math.cos(ang), sn = Math.sin(ang);
+        ctx.strokeStyle = MARK; ctx.fillStyle = MARK; ctx.lineWidth = 2.2;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo((R + 16) * cs, -(R + 16) * sn); ctx.stroke();
+        ctx.beginPath(); ctx.arc(0, 0, Math.min(26, R * 0.22), 0, -ang, true); ctx.stroke();
+        ctx.beginPath(); ctx.arc(R * cs, -R * sn, 4.5, 0, TAU); ctx.fill();
+        const deg = Math.round(ang * 180 / Math.PI * 10) / 10, txt = String(deg).replace('.', ',') + '°';
+        const bx = R * 0.48 * cs, by = -R * 0.48 * sn - 12;
+        ctx.font = '600 13px "Be Vietnam Pro",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tw = ((ctx.measureText(txt) || {}).width || 28) + 14;
+        ctx.fillStyle = 'rgba(29,42,38,.88)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - tw / 2, by - 11, tw, 22, 6) : ctx.rect(bx - tw / 2, by - 11, tw, 22); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, bx, by);
+      }
+      if (act && act.kind === 'inst' && act.t === t && act.rot){
+        let deg = Math.round(t.a * 180 / Math.PI) % 360;
+        if (deg > 180) deg -= 360; else if (deg <= -180) deg += 360;
+        const txt = deg + '°', mx = 0, my = -R * 0.35;
+        ctx.font = '600 13px "Be Vietnam Pro",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tw = ((ctx.measureText(txt) || {}).width || 28) + 14;
+        ctx.fillStyle = 'rgba(29,42,38,.86)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(mx - tw / 2, my - 11, tw, 22, 6) : ctx.rect(mx - tw / 2, my - 11, tw, 22); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+      }
+      ctx.restore();
+    } else if (t.kind === 'sq45' || t.kind === 'sq60'){
+      ctx.save();
+      ctx.translate(view.x + t.x * view.k, view.y - t.y * view.k);
+      ctx.rotate(-t.a);
+      const W0 = t.kind === 'sq45' ? SQ45_L : SQ60_W, H0 = t.kind === 'sq45' ? SQ45_L : SQ60_H;
+      const LW = W0 * view.k, LH = H0 * view.k;
+      ctx.fillStyle = isBoard ? 'rgba(28,42,38,.58)' : 'rgba(232,244,248,.55)';
+      ctx.strokeStyle = isBoard ? '#8fa39b' : '#5a6963';
+      ctx.lineWidth = 1.5; ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.moveTo(0, 0); ctx.lineTo(LW, 0); ctx.lineTo(0, -LH); ctx.closePath();
+      ctx.moveTo(LW * 0.24, -LH * 0.24); ctx.lineTo(LW * 0.6, -LH * 0.24); ctx.lineTo(LW * 0.24, -LH * 0.6); ctx.closePath();
+      ctx.fill('evenodd'); ctx.stroke();
+      const sq = clamp(Math.min(LW, LH) * 0.055, 7, 14);
+      ctx.strokeStyle = inkCol; ctx.fillStyle = inkCol; ctx.lineWidth = 1.1; ctx.lineCap = 'butt';
+      ctx.beginPath(); ctx.moveTo(sq, 0); ctx.lineTo(sq, -sq); ctx.lineTo(0, -sq); ctx.stroke();
+      const hMaj = Math.min(11, Math.min(LW, LH) * 0.048), hMed = hMaj * 0.62;
+      const maxX = Math.floor((W0 - 0.35) * 2), maxY = Math.floor((H0 - 0.35) * 2);
+      ctx.beginPath();
+      for (let i = 1; i <= maxX; i++){ const x = (i * 0.5) * view.k, h = (i % 2 === 0) ? hMaj : hMed; ctx.moveTo(x, 0); ctx.lineTo(x, -h); }
+      for (let i = 1; i <= maxY; i++){ const y = -(i * 0.5) * view.k, h = (i % 2 === 0) ? hMaj : hMed; ctx.moveTo(0, y); ctx.lineTo(h, y); }
+      ctx.stroke();
+      if (Math.min(LW, LH) >= 85){
+        const fsz = clamp(Math.round(view.k * 0.22), 9, 12);
+        ctx.font = '500 ' + fsz + 'px "Be Vietnam Pro",system-ui,sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        for (let u = 1; u <= Math.floor(W0 - 0.6); u++) ctx.fillText(String(u), u * view.k, -hMaj - 2);
+        ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+        for (let u = 1; u <= Math.floor(H0 - 0.6); u++) ctx.fillText(String(u), hMaj + 3, -u * view.k);
+      }
+      const kb = instKnobLocal(t), kx = kb.x * view.k, ky = -kb.y * view.k;
+      ctx.beginPath(); ctx.arc(kx, ky, 14, 0, TAU);
+      ctx.fillStyle = isBoard ? 'rgba(51,66,61,.9)' : 'rgba(246,247,244,.92)'; ctx.fill();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = isBoard ? '#86cbb4' : '#2f5d50'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(kx, ky, 6.5, -Math.PI * 0.75, Math.PI * 0.55); ctx.stroke();
+      const ax = kx + 6.5 * Math.cos(Math.PI * 0.55), ay = ky + 6.5 * Math.sin(Math.PI * 0.55);
+      ctx.beginPath(); ctx.moveTo(ax - 3.5, ay - 2.5); ctx.lineTo(ax, ay); ctx.lineTo(ax + 2.5, ay - 3.5); ctx.stroke();
+      if (act && act.kind === 'inst' && act.t === t && act.rot){
+        let deg = Math.round(t.a * 180 / Math.PI) % 360;
+        if (deg > 180) deg -= 360; else if (deg <= -180) deg += 360;
+        const txt = deg + '°', mx = LW * 0.35, my = -LH * 0.35;
+        ctx.font = '600 13px "Be Vietnam Pro",system-ui,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const tw = ((ctx.measureText(txt) || {}).width || 28) + 14;
+        ctx.fillStyle = 'rgba(29,42,38,.86)';
+        ctx.beginPath(); ctx.roundRect ? ctx.roundRect(mx - tw / 2, my - 11, tw, 22, 6) : ctx.rect(mx - tw / 2, my - 11, tw, 22); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.fillText(txt, mx, my);
+      }
+      ctx.restore();
+    }
+  }
+}
+function findInstEdge(sx, sy){
+  let best = null, bd = 18;
+  for (let i = instruments.length - 1; i >= 0; i--){
+    for (const e of edgesOf(instruments[i])){
+      const sx0 = view.x + e.x0 * view.k, sy0 = view.y - e.y0 * view.k;
+      const sx1 = view.x + e.x1 * view.k, sy1 = view.y - e.y1 * view.k;
+      const dx = sx1 - sx0, dy = sy1 - sy0, L = hyp(dx, dy); if (L < 1e-6) continue;
+      const ux = dx / L, uy = dy / L, u = (sx - sx0) * ux + (sy - sy0) * uy;
+      if (u < -10 || u > L + 10) continue;
+      const d = Math.abs((sx - sx0) * uy - (sy - sy0) * ux);
+      if (d < bd){
+        const wdx = e.x1 - e.x0, wdy = e.y1 - e.y0, wL = hyp(wdx, wdy) || 1;
+        bd = d; best = {x0: e.x0, y0: e.y0, x1: e.x1, y1: e.y1, sx0, sy0, ux, uy, wux: wdx / wL, wuy: wdy / wL};
+      }
+    }
+  }
+  return best;
+}
+function projEdge(ed, s){
+  const u = (s.x - ed.sx0) * ed.ux + (s.y - ed.sy0) * ed.uy;
+  return {x: ed.sx0 + u * ed.ux, y: ed.sy0 + u * ed.uy, u};
+}
+function penPos(a, ev){
+  const s = pos(ev);
+  return (a && a.edge) ? projEdge(a.edge, s) : s;
+}
+function syncInstMenu(){
+  for (const [id, k] of [['#mRuler', 'ruler'], ['#mProt', 'protractor'], ['#mSq45', 'sq45'], ['#mSq60', 'sq60']]){
+    const el = $(id); if (el) el.setAttribute('aria-checked', String(instruments.some(t => t.kind === k)));
+  }
+}
+function toggleInstrument(kind){
+  const idx = instruments.findIndex(t => t.kind === kind);
+  if (idx >= 0) instruments.splice(idx, 1);
+  else {
+    const c = toWorld((W || window.innerWidth) / 2, (H || window.innerHeight) / 2), d = instruments.length * 0.6;
+    const cx = c.x + d, cy = c.y - d;
+    if (kind === 'ruler') instruments.push({kind:'ruler', x: r4(cx - RULER_L / 2), y: r4(cy - RULER_W / 2), a: 0});
+    else if (kind === 'protractor') instruments.push({kind:'protractor', x: r4(cx), y: r4(cy - PROT_R * 0.4), a: 0});
+    else if (kind === 'sq45') instruments.push({kind:'sq45', x: r4(cx - SQ45_L / 3), y: r4(cy - SQ45_L / 3), a: 0});
+    else if (kind === 'sq60') instruments.push({kind:'sq60', x: r4(cx - SQ60_W / 3), y: r4(cy - SQ60_H / 3), a: 0});
+  }
+  saveInstruments(); syncInstMenu(); redrawOver();
+}
+function startInst2(t){
+  const pts = [...touches.values()]; if (pts.length < 2) return;
+  const w1 = toWorld(pts[0].x, pts[0].y), w2 = toWorld(pts[1].x, pts[1].y);
+  const mx0 = (w1.x + w2.x) / 2, my0 = (w1.y + w2.y) / 2, fa0 = Math.atan2(w2.y - w1.y, w2.x - w1.x);
+  act = {kind:'inst', mode:'inst2', ptype:'touch', t, x0: t.x, y0: t.y, a0: t.a, mx0, my0, fa0, rot: true};
+}
+queueMicrotask(() => {
+  const ma = $('#mAxes');
+  if (ma){ const orig = ma.setAttribute.bind(ma); ma.setAttribute = (k, v) => { orig(k, v); syncInstMenu(); }; }
+  for (const [id, k] of [['#mRuler', 'ruler'], ['#mProt', 'protractor'], ['#mSq45', 'sq45'], ['#mSq60', 'sq60']]){
+    const el = $(id); if (el) el.addEventListener('click', () => { toggleInstrument(k); updateMenu(); });
+  }
+  syncInstMenu();
+  let savedTool = null, prevAct = null, hit = null, upPrev = null;
+  over.addEventListener('pointerdown', (e) => {
+    savedTool = null; prevAct = act; hit = null;
+    if (cropMode || asking || e.pointerType === 'pen' || penBtn(e)) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    const s = pos(e), w = toWorld(s.x, s.y), t = hitInstrument(w);
+    if (t){
+      const p = instLocal(t, w), knob = hitInstKnob(t, s);
+      const arc = !knob && t.kind === 'protractor' && p.y * view.k > 14 && (PROT_R - hyp(p.x, p.y)) * view.k <= 18;
+      hit = {t, w, knob, arc, ray: clamp(Math.atan2(p.y, p.x), 0, Math.PI)};
+    }
+    if (hit || (e.pointerType === 'touch' && prevAct && prevAct.kind === 'inst')){ savedTool = ui.tool; ui.tool = 'pan'; }
+  }, true);
+  over.addEventListener('pointerdown', (e) => {
+    if (savedTool !== null){ ui.tool = savedTool; savedTool = null; }
+    if (cropMode || asking || e.pointerType === 'pen' || penBtn(e)) return;
+    if (e.pointerType === 'mouse'){
+      if (!hit || e.button !== 0) return;
+      const {t, w, knob, arc, ray} = hit;
+      act = knob ? {kind:'inst', mode:'rot', id: e.pointerId, ptype:'mouse', t, a0: t.a, sa0: Math.atan2(w.y - t.y, w.x - t.x), rot: true}
+                 : arc ? {kind:'inst', mode:'ray', id: e.pointerId, ptype:'mouse', t, ray, rot: false}
+                 : {kind:'inst', mode:'drag', id: e.pointerId, ptype:'mouse', t, dx: w.x - t.x, dy: w.y - t.y, rot: false};
+      redrawOver(); return;
+    }
+    if (e.pointerType === 'touch'){
+      if (!touches.has(e.pointerId)) return;
+      if (touches.size === 1 && hit){
+        const {t, w, knob, arc, ray} = hit;
+        act = knob ? {kind:'inst', mode:'rot', id: e.pointerId, ptype:'touch', t, a0: t.a, sa0: Math.atan2(w.y - t.y, w.x - t.x), rot: true}
+                   : arc ? {kind:'inst', mode:'ray', id: e.pointerId, ptype:'touch', t, ray, rot: false}
+                   : {kind:'inst', mode:'drag', id: e.pointerId, ptype:'touch', t, dx: w.x - t.x, dy: w.y - t.y, rot: false};
+        redrawOver();
+      } else if (touches.size === 2){
+        let t = (prevAct && prevAct.kind === 'inst') ? prevAct.t : null;
+        if (!t){
+          const ps = [...touches.values()], t1 = hitInstrument(toWorld(ps[0].x, ps[0].y)), t2 = hitInstrument(toWorld(ps[1].x, ps[1].y));
+          if (t1 && t1 === t2) t = t1;
+        }
+        if (t){ startInst2(t); redrawOver(); }
+      }
+    }
+  });
+  over.addEventListener('pointermove', (e) => {
+    if (!act || act.kind !== 'inst') return;
+    const s = pos(e), w = toWorld(s.x, s.y), t = act.t;
+    if (act.mode === 'inst2'){
+      if (e.pointerType === 'touch' && touches.has(e.pointerId)) touches.set(e.pointerId, s);
+      const ps = [...touches.values()]; if (ps.length < 2) return;
+      const w1 = toWorld(ps[0].x, ps[0].y), w2 = toWorld(ps[1].x, ps[1].y);
+      const mx = (w1.x + w2.x) / 2, my = (w1.y + w2.y) / 2, fa = Math.atan2(w2.y - w1.y, w2.x - w1.x);
+      const na = snapInstAngle(act.a0 + (fa - act.fa0)), da = na - act.a0, rx = act.x0 - act.mx0, ry = act.y0 - act.my0;
+      t.a = na; t.x = mx + rx * Math.cos(da) - ry * Math.sin(da); t.y = my + rx * Math.sin(da) + ry * Math.cos(da);
+      saveInstruments(); redrawOver(); return;
+    }
+    if (e.pointerId !== act.id) return;
+    if (act.mode === 'rot'){ t.a = snapInstAngle(act.a0 + (Math.atan2(w.y - t.y, w.x - t.x) - act.sa0)); act.rot = true; }
+    else if (act.mode === 'ray'){ const p = instLocal(t, w); act.ray = clamp(Math.atan2(Math.max(0, p.y), p.x), 0, Math.PI); }
+    else { t.x = w.x - act.dx; t.y = w.y - act.dy; }
+    saveInstruments(); redrawOver();
+  });
+  const onUpCap = () => { upPrev = (act && act.kind === 'inst') ? act : null; };
+  const onUpBub = (e) => {
+    if (!upPrev) return;
+    const prev = upPrev; upPrev = null;
+    if (prev.ptype === 'touch' && touches.size === 1){
+      const [remId, remS] = [...touches.entries()][0], rw = toWorld(remS.x, remS.y), t = prev.t;
+      act = {kind:'inst', mode:'drag', id: remId, ptype:'touch', t, dx: rw.x - t.x, dy: rw.y - t.y, rot: false};
+      saveInstruments(); redrawOver(); return;
+    }
+    if (prev.ptype === 'mouse' && e.pointerId !== prev.id) return;
+    if (prev.ptype === 'touch' && touches.size > 0) return;
+    act = null; saveInstruments(); redrawOver();
+  };
+  over.addEventListener('pointerup', onUpCap, true);
+  over.addEventListener('pointercancel', onUpCap, true);
+  over.addEventListener('pointerup', onUpBub);
+  over.addEventListener('pointercancel', onUpBub);
+});
+
 function startStroke(b, w, e, hl, shape){
+  const edge = !shape ? findInstEdge(b.sx, b.sy) : null;
+  if (edge){ const p0 = projEdge(edge, {x: b.sx, y: b.sy}); b = {...b, sx: p0.x, sy: p0.y}; w = toWorld(p0.x, p0.y); }
   const style = (hl || shape) ? 'ball' : ui.penStyle, vw = style !== 'ball';
   const f0 = vw ? (e.pointerType === 'pen' ? clamp(0.38 + 0.9 * sCurvePressure(e.pressure || 0.5), 0.35, 1.3) : 0.72) : 0.5;
-  act = {...b, kind:'stroke', pts: [r4(w.x), r4(w.y), r4(f0)], pred: null, hl, shape, style, vw, f: f0,
+  act = {...b, kind:'stroke', edge, pts: [r4(w.x), r4(w.y), r4(f0)], pred: null, hl, shape, style, vw, f: f0,
          w: (shape ? 2.2 : INK_W[ui.penW]) / view.k * (hl ? 5 : 1), color: shape ? 'ink' : ui.penColor,
          ex: oneEuro(SMOOTH[ui.smooth][0], SMOOTH[ui.smooth][1]), ey: oneEuro(SMOOTH[ui.smooth][0], SMOOTH[ui.smooth][1]),
          raw: [w.x, w.y, w.x, w.y], rpx: b.sx, rpy: b.sy, rvx: 0, rvy: 0, rvl: 0, lastV: 0,
          len: 0, ax: b.sx, ay: b.sy, lsx: b.sx, lsy: b.sy, fx: b.sx, fy: b.sy, rx: b.sx, ry: b.sy, lt: e.timeStamp || performance.now(), holdT: 0};
   drawOverlay();
+  if (fastInk && !hl && !edge){
+    act.fast = true; showInk();
+    act.fq = [b.sx, b.sy]; act.fmx = b.sx; act.fmy = b.sy; act.fh = 0; act.fT = e.timeStamp || 0;
+  }
+}
+/* Vẽ ngay điểm bút thô lên lớp mực nhanh: cong bậc hai qua trung điểm, cộng đoạn nối tới đúng ngòi,
+   bề rộng theo lực nhấn hiện tại. Lớp này chỉ để nhìn trong lúc viết, nhấc bút là ẩn */
+function fastDraw(a, ev){
+  if (!inkOn) return;
+  const t = ev.timeStamp || 0; if (t && t <= a.fT) return; a.fT = t;   /* pointerrawupdate và pointermove mang cùng điểm: không vẽ hai lần */
+  const s = penPos(a, ev), q = a.fq; if (hyp(s.x - q[0], s.y - q[1]) < 0.4) return;
+  const h = Math.max(0.45, a.w * view.k * widthOf(a, a.vw ? a.f : 0.5) / 2), h0 = a.fh || h;
+  const sx = a.fmx, sy = a.fmy, cx = q[0], cy = q[1], ex = (cx + s.x) / 2, ey = (cy + s.y) / 2;
+  const c = col(a.color, ui.paper);
+  fctx.setTransform(DPR, 0, 0, DPR, 0, 0); fctx.fillStyle = c; fctx.strokeStyle = c; fctx.lineCap = 'round'; fctx.lineJoin = 'round';
+  if (!a.vw){
+    fctx.lineWidth = 2 * h; fctx.beginPath(); fctx.moveTo(sx, sy); fctx.quadraticCurveTo(cx, cy, ex, ey); fctx.lineTo(s.x, s.y); fctx.stroke();
+  } else {
+    const L = hyp(cx - sx, cy - sy) + hyp(ex - cx, ey - cy), m = clamp(Math.ceil(L / 1.5), 1, 16);
+    let px = sx, py = sy, ph = h0;
+    const piece = (x, y, w) => { const dx = x - px, dy = y - py, d = hyp(dx, dy);
+      if (d > 1e-6){ const nx = -dy / d, ny = dx / d; fctx.beginPath(); fctx.moveTo(px + nx * ph, py + ny * ph); fctx.lineTo(x + nx * w, y + ny * w); fctx.lineTo(x - nx * w, y - ny * w); fctx.lineTo(px - nx * ph, py - ny * ph); fctx.closePath(); fctx.fill(); }
+      fctx.beginPath(); fctx.arc(x, y, w, 0, TAU); fctx.fill(); px = x; py = y; ph = w; };
+    if (!a.fh){ fctx.beginPath(); fctx.arc(sx, sy, h, 0, TAU); fctx.fill(); }
+    for (let j = 1; j <= m; j++){ const k = j / m, u = 1 - k; piece(u * u * sx + 2 * u * k * cx + k * k * ex, u * u * sy + 2 * u * k * cy + k * k * ey, h0 + (h - h0) * k); }
+    piece(s.x, s.y, h);
+  }
+  a.fmx = ex; a.fmy = ey; a.fh = h; q[0] = s.x; q[1] = s.y;
 }
 function strokeMove(e){
   const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+  if (act.fast) for (const ev of (evs.length ? evs : [e])) fastDraw(act, ev);
   for (const ev of (evs.length ? evs : [e])){
-    const s = pos(ev); act.rx = s.x; act.ry = s.y;
+    const s = penPos(act, ev); act.rx = s.x; act.ry = s.y;
     if (hyp(s.x - act.ax, s.y - act.ay) > 7){
       act.ax = s.x; act.ay = s.y; clearTimeout(act.holdT);
-      if (act.len > 60 && !act.shape && ui.snap) act.holdT = setTimeout(holdSnap, 500);
+      if (act.len > 60 && !act.shape && !act.edge && ui.snap) act.holdT = setTimeout(holdSnap, 500);
     }
     const t0 = ev.timeStamp || performance.now();
     { const rvx = s.x - act.rpx, rvy = s.y - act.rpy, lr = hyp(rvx, rvy);
-      if (lr > 1.2 && act.rvl > 1.2 && (rvx * act.rvx + rvy * act.rvy) < -0.17 * lr * act.rvl && !act.hl){
+      if (lr > 1.2 && act.rvl > 1.2 && (rvx * act.rvx + rvy * act.rvy) < -0.17 * lr * act.rvl && !act.hl && !act.edge){
         const w0 = toWorld(act.rpx, act.rpy); act.pts.push(r4(w0.x), r4(w0.y), act.vw ? Math.round(act.f * 100) / 100 : 0.5);
         act.ex.reset(act.rpx, t0); act.ey.reset(act.rpy, t0); act.fx = act.rpx; act.fy = act.rpy; act.lsx = act.rpx; act.lsy = act.rpy; act.apex = true;
       }
       if (lr > 0.5){ act.rvx = rvx; act.rvy = rvy; act.rvl = lr; act.rpx = s.x; act.rpy = s.y; } }
     act.fx = act.ex(s.x, t0); act.fy = act.ey(s.y, t0);
+    if (act.edge){ const fp = projEdge(act.edge, {x: act.fx, y: act.fy}); act.fx = fp.x; act.fy = fp.y; }
     const dx = act.fx - act.lsx, dy = act.fy - act.lsy, d = hyp(dx, dy); if (d < 0.65) continue;
     const dt = Math.max(1, t0 - act.lt); act.lt = t0; act.lastV = d / dt;
     act.f += (clamp(penFactor(act, ev, dx, dy, d, dt), 0.26, 1.85) - act.f) * 0.28;
@@ -2383,14 +3677,16 @@ function strokeMove(e){
     tail.push(r4(wRaw.x), r4(wRaw.y), act.vw ? Math.round(act.f * 0.92 * 100) / 100 : 0.5);
   }
   if (preds.length){
-    const pe = preds[Math.min(1, preds.length - 1)], ps = pos(pe);
-    if (hyp(ps.x - act.rx, ps.y - act.ry) < 28){
-      const wp = toWorld(ps.x, ps.y);
+    const pe = preds[Math.min(1, preds.length - 1)], ps = penPos(act, pe);
+    let dx = ps.x - act.rx, dy = ps.y - act.ry; const d = hyp(dx, dy);
+    if (d > 0.5){
+      if (d > 28){ dx *= 28 / d; dy *= 28 / d; }
+      const wp = toWorld(act.rx + dx, act.ry + dy);
       tail.push(r4(wp.x), r4(wp.y), act.vw ? Math.round(act.f * 0.82 * 100) / 100 : 0.5);
     }
   }
   act.pred = tail.length ? tail : null;
-  redrawOver();
+  if (!act.fast) redrawOver();
 }
 function mkStroke(a, pts, poly, vw){
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
@@ -2483,6 +3779,22 @@ function endStroke(a){
     const r = recognize(p);
     if (r){ const snap = snapshot(); buildShape(r); pushUndo(snap); commit(); }
     else { toast('Chưa nhận ra hình. Hãy vẽ đoạn thẳng, đường tròn, tam giác hoặc tứ giác.'); redrawOver(); }
+    return;
+  }
+  if (a.edge){
+    const ed = a.edge; let u0 = Infinity, u1 = -Infinity, fSum = 0, cnt = 0;
+    for (let i = 0; i < p.length; i += 3){
+      const u = (p[i] - ed.x0) * ed.wux + (p[i + 1] - ed.y0) * ed.wuy;
+      if (u < u0) u0 = u;
+      if (u > u1) u1 = u;
+      fSum += p[i + 2]; cnt++;
+    }
+    const fAvg = a.vw ? Math.round((cnt ? fSum / cnt : 0.5) * 100) / 100 : 0.5;
+    const uS = (p[0] - ed.x0) * ed.wux + (p[1] - ed.y0) * ed.wuy;
+    const uE = (p[p.length - 3] - ed.x0) * ed.wux + (p[p.length - 2] - ed.y0) * ed.wuy;
+    const ua = uE >= uS ? u0 : u1, ub = uE >= uS ? u1 : u0;
+    const pts = [r4(ed.x0 + ua * ed.wux), r4(ed.y0 + ua * ed.wuy), fAvg, r4(ed.x0 + ub * ed.wux), r4(ed.y0 + ub * ed.wuy), fAvg];
+    addStroke(a, pts, true, a.vw);
     return;
   }
   addStroke(a, a.hl ? p : refineStroke(p, a.vw, flick), false, a.vw);
@@ -2849,6 +4161,11 @@ function onUpMain(e){
 }
 over.addEventListener('pointerdown', onDown);
 over.addEventListener('pointermove', onMove);
+over.addEventListener('pointerrawupdate', (e) => {
+  if (!act || act.kind !== 'stroke' || !act.fast || e.pointerId !== act.id || penBtn(e)) return;
+  const evs = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+  for (const ev of (evs.length ? evs : [e])) fastDraw(act, ev);
+});
 over.addEventListener('pointerup', onUp);
 /* Hệ điều hành hủy chạm (tì lòng bàn tay, cử chỉ hệ thống): không tính là chạm hai/ba ngón để hoàn tác,
    thao tác của ngón tay bị bỏ; nét bút đang viết thì vẫn giữ */
@@ -3620,6 +4937,7 @@ function updateMenu(){
   $('#optSnap').setAttribute('aria-checked', String(ui.snap));
   $('#optSoft').setAttribute('aria-checked', String(ui.soft !== false));
   $('#optScroll').setAttribute('aria-checked', String(ui.autoScroll));
+  $('#optFast').hidden = !FAST_OK; $('#optFast').setAttribute('aria-checked', String(fastInk));
   for (const b of document.querySelectorAll('#aligns button')) b.setAttribute('aria-pressed', String(b.dataset.v === ui.align));
   $('#mAxes').setAttribute('aria-checked', String(ui.axes));
   $('#mAuto').setAttribute('aria-checked', String(ui.autoLabel));
@@ -3641,6 +4959,7 @@ $('#optSoft').addEventListener('click', () => { ui.soft = ui.soft === false; upd
 $('#optSnap').addEventListener('click', () => { ui.snap = !ui.snap; updateMenu(); save(); });
 for (const b of document.querySelectorAll('#aligns button')) b.addEventListener('click', () => { ui.align = b.dataset.v; updateMenu(); save(); });
 $('#optScroll').addEventListener('click', () => { ui.autoScroll = !ui.autoScroll; updateMenu(); save(); });
+$('#optFast').addEventListener('click', () => { fastInk = FAST_OK && !fastInk; try { localStorage.setItem('bhh-fastInk', fastInk ? '1' : '0'); } catch (_) {} updateMenu(); });
 $('#mAuto').addEventListener('click', () => { ui.autoLabel = !ui.autoLabel; updateMenu(); save(); toast(ui.autoLabel ? 'Điểm mới sẽ được đặt tên A, B, C… tự động.' : 'Điểm mới không có tên; dùng công cụ Đặt tên điểm hoặc ô Tên trên thanh kiểu dáng.'); });
 $('#mAxes').addEventListener('click', () => { ui.axes = !ui.axes; updateMenu(); commit(); });
 for (const [id, k] of [['#expArea', 'area'], ['#expWhat', 'what'], ['#expColor', 'color'], ['#expFmt', 'fmt']]) for (const b of document.querySelectorAll(id + ' button')) b.addEventListener('click', () => { ui.exp[k] = b.dataset.v; updateMenu(); save(); });
