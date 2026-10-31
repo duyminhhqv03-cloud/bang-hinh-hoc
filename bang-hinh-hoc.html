@@ -3643,6 +3643,7 @@ function startStroke(b, w, e, hl, shape){
   if (fastInk && !hl && !edge){
     act.fast = true; showInk();
     act.fq = [b.sx, b.sy]; act.fmx = b.sx; act.fmy = b.sy; act.fh = 0; act.fT = e.timeStamp || 0;
+    act.rw = act.pts.slice(); act.rwx = b.sx; act.rwy = b.sy;
   }
 }
 /* Vẽ ngay điểm bút thô lên lớp mực nhanh: cong bậc hai qua trung điểm, cộng đoạn nối tới đúng ngòi,
@@ -3674,6 +3675,8 @@ function strokeMove(e){
   if (act.fast) for (const ev of (evs.length ? evs : [e])) fastDraw(act, ev);
   for (const ev of (evs.length ? evs : [e])){
     const s = penPos(act, ev); act.rx = s.x; act.ry = s.y;
+    /* Viết siêu nhạy: giữ đúng các điểm bút đã hiện trên lớp mực nhanh, để nhấc bút nét lưu giống hệt nét vừa thấy */
+    if (act.rw && hyp(s.x - act.rwx, s.y - act.rwy) >= 0.75){ const w = toWorld(s.x, s.y); act.rw.push(r4(w.x), r4(w.y), act.vw ? Math.round(act.f * 100) / 100 : 0.5); act.rwx = s.x; act.rwy = s.y; }
     if (hyp(s.x - act.ax, s.y - act.ay) > 7){
       act.ax = s.x; act.ay = s.y; clearTimeout(act.holdT);
       if (act.len > 60 && !act.shape && !act.edge && ui.snap) act.holdT = setTimeout(holdSnap, 500);
@@ -3823,6 +3826,10 @@ function endStroke(a){
     const pts = [r4(ed.x0 + ua * ed.wux), r4(ed.y0 + ua * ed.wuy), fAvg, r4(ed.x0 + ub * ed.wux), r4(ed.y0 + ub * ed.wuy), fAvg];
     addStroke(a, pts, true, a.vw);
     return;
+  }
+  if (a.rw && a.rw.length >= 6){
+    if (hyp(a.rx - a.rwx, a.ry - a.rwy) > 0.05){ const w = toWorld(a.rx, a.ry); a.rw.push(r4(w.x), r4(w.y), a.vw ? Math.round(a.f * 100) / 100 : 0.5); }
+    addStroke(a, a.rw, false, a.vw); return;
   }
   addStroke(a, a.hl ? p : refineStroke(p, a.vw, flick), false, a.vw);
 }
